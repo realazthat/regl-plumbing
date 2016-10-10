@@ -183,17 +183,8 @@ class NodeInputContext extends Function {
         return value;
       }
 
-      // check if its a node; this shouldn't happen in a leaf visitor but whatever
-      // if (common.vtIsNode({value})) {
-      //   return value;
-      // }
-
       throw new common.PipelineError(`Don't know how to evaluate this node in the input argument tree ${value}`);
     }
-
-    // console.log('this._args:',this._args);
-
-    // console.log('value:',value);
 
     // sort it shortest-to-longest
     this.rootNode()._injections.sort(function (lhs, rhs) {
@@ -364,16 +355,6 @@ class NodeInputContext extends Function {
     }
 
     this.setValue(args);
-    // let injections = this.rootNode()._injections;
-
-    // console.log('nodeinput.__call__.args: ', args);
-
-    // util.maptree({value: args, leafVisitor: function({value, path}){
-    //     injections.push({path: clone(path),value});
-    //     return value;
-    //   }
-    // });
-    // console.log('injections: ', injections);
   }
 }
 

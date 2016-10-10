@@ -26,8 +26,6 @@ function allSync (jobs) {
  *
  */
 function maptree ({value, leafVisitor, preVisitor = null, postVisitor = null, path = [], depth = 0, maxDepth = 10}) {
-  // console.log('maptree.value: ', Type.string(value));
-
   if (depth > maxDepth) {
     throw new Error('Tree recursion reached maximum depth');
   }
@@ -54,9 +52,6 @@ function maptree ({value, leafVisitor, preVisitor = null, postVisitor = null, pa
       let childValue = value[key];
 
       childPath[childPath.length - 1] = key;
-      // console.log('path0:',path);
-      // console.log('key:',key);
-      // console.log('childPath:',childPath);
 
       childValue = maptree({value: childValue, path: childPath, leafVisitor, preVisitor, postVisitor, depth: depth + 1});
       result[key] = childValue;
@@ -123,31 +118,17 @@ let accessHandler = {
     return obj.__call__.apply(obj, argumentsList);
   },
   get: function (obj, prop) {
-    // console.log('get.prop:',prop)
     if (prop === '__unbox__') {
       return () => obj;
     }
 
-    // if ('__hasitem__' in obj && '__getitem__' in obj) {
-    //   if (obj.__hasitem__(prop)) {
-    //     return obj.__getitem__(prop);
-    //   } else {
-
-    //   }
-
-    //   return undefined;
-    // }
-
     if ('__getitem__' in obj) {
-      // if (!(prop in obj)) {
       return obj.__getitem__(prop);
-      // }
     }
 
     return obj[prop];
   },
   has: function (obj, prop) {
-    // console.log('get.prop:',prop)
     if (prop === '__unbox__') {
       return true;
     }

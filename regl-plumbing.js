@@ -265,9 +265,6 @@ class SugarNode {
         allowedTypes: [dynamic.Dynamic]
       });
 
-      console.log('snode.component:', snode.component);
-      console.log('snode.i:', snode.i);
-      console.log('out:', out);
       snode.o.__unbox__().setValue(out);
       snode.o.__unbox__().compute({runtime: 'static'});
 
