@@ -12,7 +12,7 @@ class Texture extends Component {
   compile ({context}) {
     // resolve the inputs statically
     let inputs = context.resolve(context.i);
-    let {resolution, format = 'rgba', type = 'uint8', min = 'nearest', mag = 'nearest'} = inputs;
+    let {resolution, format = 'rgba', type = 'uint8', min = 'nearest', mag = 'nearest', mipmap = false} = inputs;
 
     let viewport = {wh: resolution.wh, xy: [0, 0]};
 
@@ -22,7 +22,8 @@ class Texture extends Component {
       format,
       type,
       min,
-      mag
+      mag,
+      mipmap
     });
 
     return {
@@ -34,7 +35,8 @@ class Texture extends Component {
       format: format,
       type: type,
       min: min,
-      mag: mag
+      mag: mag,
+      mipmap: mipmap !== false
     };
   }
 }

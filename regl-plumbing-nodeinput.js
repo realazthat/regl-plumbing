@@ -58,6 +58,11 @@ class NodeInputContext extends Function {
                      util.accessHandler);
   }
 
+  node () {
+    assert(this._node instanceof main.private.SugarNode);
+    return this._node;
+  }
+
   rootNode () {
     assert(this._root instanceof NodeInputContext);
 
@@ -66,13 +71,14 @@ class NodeInputContext extends Function {
 
   computeInSNodes () {
     assert(this === this.rootNode());
+    let nodeinputcontext = this;
 
     let results = [];
 
-    this._injection.forEach(function ({path, value}) {
+    this._injections.forEach(function ({path, value}) {
       // sanity
-      value = this.checkInjectionValue(value);
-      common.maptree({
+      value = nodeinputcontext.checkInjectionValue(value);
+      util.maptree({
         value,
         leafVisitor: function ({value}) {
           if (value instanceof nodeoutput.NodeOutputContext) {

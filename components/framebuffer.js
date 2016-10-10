@@ -29,7 +29,8 @@ class Framebuffer extends Component {
       format: context.map(context.i.texture.format),
       type: context.map(context.i.texture.type),
       min: context.map(context.i.texture.min),
-      mag: context.map(context.i.texture.mag)
+      mag: context.map(context.i.texture.mag),
+      mipmap: context.map(context.i.texture.mag)
     };
   }
 

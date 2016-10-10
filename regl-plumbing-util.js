@@ -14,7 +14,11 @@ const Type = require('type-of-is');
  * value will be fed in as the argument of the next job.
  */
 function allSync (jobs) {
-  return jobs.reduce((lhs, rhs) => (lhs instanceof Promise) ? lhs.then((result) => Promise.resolve(rhs(result))) : rhs(lhs));
+  let initialValue = null;
+  return jobs.reduce(
+    (lhs, rhs) => (lhs instanceof Promise) ? lhs.then((result) => Promise.resolve(rhs(result))) : rhs(lhs),
+    initialValue
+  );
 }
 
 /**

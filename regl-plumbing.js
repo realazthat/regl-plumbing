@@ -13,16 +13,75 @@ const dynamic = require('./regl-plumbing-dynamic.js');
 
 const EventEmitter = require('events');
 
+function levelOrdering (node0) {
+  assert(node0 instanceof SugarNode);
+
+  let seen = new Set();
+
+  let levels = [[node0]];
+
+  let currentLevel = levels[0];
+
+  while (currentLevel.length > 0) {
+    let nextLevel = [];
+
+    for (let snode of currentLevel) {
+      let parents = snode.inSNodes();
+      nextLevel = nextLevel.concat(parents);
+    }
+
+    nextLevel.forEach((snode) => { assert(snode instanceof SugarNode); });
+
+    nextLevel = nextLevel.filter((snode) => !seen.has(snode));
+
+    nextLevel.forEach((snode) => seen.add(snode));
+
+    levels.push(nextLevel);
+
+    currentLevel = nextLevel;
+  }
+
+  levels.reverse();
+
+  levels = levels.filter((level) => level.length > 0);
+
+  return levels;
+}
+
+function ordering (node) {
+  let levels = levelOrdering(node);
+
+  return levels.reduce((results, level) => results.concat(level), []);
+}
+
 class SugarNode {
   constructor ({pipeline, component}) {
     this.pipeline = pipeline;
     this.component = component;
     this.cached = {};
     this.compiling = false;
-    this.i = new Proxy(new nodeinput.NodeInputContext({pipeline, node: this}), util.accessHandler);
-    this.o = new Proxy(new nodeoutput.NodeOutputContext({pipeline}), util.accessHandler);
+    this.executing = false;
+    this.i = new Proxy(new nodeinput.NodeInputContext({pipeline, node: this.__box__()}), util.accessHandler);
+    this.o = new Proxy(new nodeoutput.NodeOutputContext({pipeline, node: this.__box__()}), util.accessHandler);
 
     this.context = null;
+
+    this._dirty = true;
+
+    Object.seal(this);
+  }
+
+  __box__ () {
+    return new Proxy(this, util.accessHandler);
+  }
+
+  get dirty () {
+    assert(this._dirty === true || this._dirty === false);
+    return this._dirty;
+  }
+
+  set dirty (color) {
+    this._dirty = color;
   }
 
   __setitem__ (subscript, value) {
@@ -46,6 +105,16 @@ class SugarNode {
 
   inSNodes () {
     return this.i.__unbox__().computeInSNodes();
+  }
+
+  clearCompile () {
+    let snode = this;
+
+    _.unset(snode.cached, 'out');
+
+    snode.compiling = false;
+    snode.context = null;
+    snode._dirty = true;
   }
 
   /**
@@ -95,17 +164,27 @@ class SugarNode {
    * If an argument is not available at compile time,
    * and the component resolves it at compile time, then it will throw an error.
    */
-  compile (args = undefined) {
-    assert(args === undefined);
-
+  compile ({recursive}) {
+    assert(recursive === true || recursive === false);
     let snode = this;
     let {pipeline} = snode;
 
-    _.unset(snode.cached, 'out');
+    if (recursive) {
+      let nodes = Array.from(ordering(snode));
 
+      nodes.forEach((node) => { node.clearCompile(); });
+      nodes.forEach((node) => { node.compiling = true; });
+
+      let jobs = nodes.map(function (node) {
+        let job = () => node.compile({recursive: false});
+        return job;
+      });
+      return util.allSync(jobs);
+    }
+
+    snode.clearCompile();
     snode.compiling = true;
 
-    // snode.i(args);
     let i = snode.i.__unbox__();
     i.compute({runtime: 'static'});
 
@@ -150,22 +229,44 @@ class SugarNode {
       snode.o.__unbox__().compute({runtime: 'static'});
 
       snode.compiling = false;
+      snode._dirty = false;
       snode.pipeline.emit('node-compiled', {snode: snode});
+      assert(snode.isCompiled());
     }
 
     let result = snode.component.compile({context});
     if (result instanceof Promise) {
       return result.then(function (out) {
-        finished(out);
+        return finished(out);
       });
     }
-    finished(result);
+    return finished(result);
   }
 
-  execute (args = {}) {
+  isCompiled () {
+    let snode = this;
+    return snode.compiling === false && snode.context instanceof execution.ExecutionContext;
+  }
+
+  execute ({recursive}) {
+    assert(recursive === true || recursive === false);
     let snode = this;
 
-    if (!_.has(snode.cached, 'out')) {
+    if (recursive) {
+      let nodes = Array.from(ordering(snode));
+
+      // nodes.forEach((node) => {node.clearExecute()});
+      nodes.forEach((node) => { node.executing = true; });
+
+      let jobs = nodes.map(function (node) {
+        let job = () => node.execute({recursive: false});
+        return job;
+      });
+      let result = util.allSync(jobs);
+      return result;
+    }
+
+    if (!(snode.isCompiled())) {
       throw new common.PipelineError('You must compile this component first before executing it');
     }
 
@@ -175,6 +276,7 @@ class SugarNode {
     snode.component.execute({context: this.context});
 
     snode.o.__unbox__().compute({runtime: 'dynamic'});
+    snode.executing = false;
   }
 }
 

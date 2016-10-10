@@ -1,5 +1,4 @@
 
-const assert = require('assert');
 const resl = require('resl');
 const regl = require('regl')();
 let {Pipeline} = require('../regl-plumbing.js');
@@ -25,19 +24,19 @@ scramble.i.iSubpassShape = [3, 2];
 // canvas.i.texture = scramble.o.framebuffer;
 canvas.i.texture = src.o;
 
-src.compile().then(function () {
-  texture.compile();
-  assert(texture.context !== null && texture.context !== undefined);
-  fbo.compile();
-  scramble.compile();
-  canvas.compile();
+regl.frame(function () {
+  if (canvas.executing) {
+    return;
+  }
 
-  regl.frame(function () {
-    src.execute();
-    texture.execute();
-    fbo.execute();
-    scramble.execute();
-    canvas.execute();
-  });
+  if (canvas.dirty && !canvas.compiling) {
+    canvas.compile({recursive: true});
+  }
+
+  if (canvas.compiling) {
+    return;
+  }
+
+  canvas.execute({recursive: true});
 });
 

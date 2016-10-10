@@ -6,24 +6,31 @@ const clone = require('clone');
 const Type = require('type-of-is');
 const common = require('./regl-plumbing-common.js');
 const util = require('./regl-plumbing-util.js');
+const main = require('./regl-plumbing.js');
 
-const nodeoutput = require('./regl-plumbing-nodeoutput.js');
 const dynamic = require('./regl-plumbing-dynamic.js');
 
 class NodeOutputContext {
-  constructor ({pipeline, rootNode = null, path = []}) {
-    assert(rootNode instanceof nodeoutput.NodeOutputContext || rootNode === null);
+  constructor ({pipeline, node, rootNode = null, path = []}) {
+    assert(rootNode instanceof NodeOutputContext || rootNode === null);
+    assert(node instanceof main.private.SugarNode);
     this.pipeline = pipeline;
     this._root = rootNode === null ? this : rootNode;
+    this._node = node;
     this._staticValue = null;
     this._dynamicValue = null;
     this._path = clone(path);
 
-    assert(this.rootNode() instanceof nodeoutput.NodeOutputContext);
+    assert(this.rootNode() instanceof NodeOutputContext);
+  }
+
+  node () {
+    assert(this._node instanceof main.private.SugarNode);
+    return this._node;
   }
 
   rootNode () {
-    assert(this._root instanceof nodeoutput.NodeOutputContext);
+    assert(this._root instanceof NodeOutputContext);
     return this._root;
   }
 
@@ -44,7 +51,7 @@ class NodeOutputContext {
 
     let {pipeline} = this;
 
-    return new Proxy(new NodeOutputContext({pipeline, rootNode: this.rootNode(), path}), util.accessHandler);
+    return new Proxy(new NodeOutputContext({pipeline, node: this.node(), rootNode: this.rootNode(), path}), util.accessHandler);
   }
 
   checkStaticValue ({value}) {
