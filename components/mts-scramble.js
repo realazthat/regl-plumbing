@@ -1,5 +1,5 @@
 
-const {Group} = require('../component.js');
+const {Group} = require('../regl-plumbing-component.js');
 
 
 

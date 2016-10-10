@@ -5,7 +5,7 @@ const assert = require('assert');
 
 const nodeinput = require('./regl-plumbing-nodeinput.js');
 const execinput = require('./regl-plumbing-execinput.js');
-const execoutput = require('./regl-plumbing-execoutput.js');
+// const execoutput = require('./regl-plumbing-execoutput.js');
 // const dynamic = require('./regl-plumbing-dynamic.js');
 const common = require('./regl-plumbing-common.js');
 const util = require('./regl-plumbing-util.js');
@@ -18,13 +18,13 @@ class ExecutionContext {
     this.pipeline = pipeline;
     this.runtime = runtime;
     this.nodeInputContext = nodeInputContext;
-    let {ExecutionInputSubcontext} = execinput;
-    let {ExecutionOutputSubcontext} = execoutput;
-    this.i = new Proxy(new ExecutionInputSubcontext({pipeline, executionContext: this, nodeInputContext,
+    this.i = new Proxy(new execinput.ExecutionInputSubcontext({pipeline, executionContext: this, nodeInputContext,
                                                      path: [], dynamic: false, disconnected: false,
                                                      terminal: false}), util.accessHandler);
-    this.o = new Proxy(new ExecutionOutputSubcontext({pipeline, executionContext: this, path: []}), util.accessHandler);
+    // this.o = new Proxy(new execoutput.ExecutionOutputSubcontext({pipeline, executionContext: this, path: []}), util.accessHandler);
     this.data = {};
+
+    Object.seal(this);
   }
 
   __setitem__ (subscript, value) {
@@ -74,10 +74,6 @@ class ExecutionContext {
 
     inputSubcontext = inputSubcontext.__unbox__();
 
-    if (inputSubcontext._disconnected) {
-      throw new common.PipelineError(`value at ${inputSubcontext._path.join('.')} is disconnected`);
-    }
-
     let value = inputSubcontext.evaluate({runtime: this.runtime, recursive: true, resolve: true});
 
     common.checkLeafs({value, allowedTypes: []});
@@ -92,28 +88,19 @@ class ExecutionContext {
 
     inputSubcontext = inputSubcontext.__unbox__();
 
-    if (inputSubcontext._disconnected) {
-      throw new common.PipelineError(`value at ${inputSubcontext._path.join('.')} is disconnected`);
+    if (!inputSubcontext.available({runtime: this.runtime}) && defaultValue !== util.NOVALUE) {
+      return defaultValue;
     }
 
-    try {
-      let value = inputSubcontext.evaluate({runtime: this.runtime, recursive: false, resolve: true});
+    let value = inputSubcontext.evaluate({runtime: this.runtime, recursive: false, resolve: true});
 
-      common.checkLeafs({
-        value,
-        allowedTypes: [],
-        allowedTests: [(value) => !common.vtIsFunction({value})]
-      });
+    common.checkLeafs({
+      value,
+      allowedTypes: [],
+      allowedTests: [(value) => !common.vtIsFunction({value})]
+    });
 
-      return value;
-    } catch (e) {
-      if (e instanceof common.NoSuchPathError) {
-        if (defaultValue === util.NOVALUE) {
-          throw e;
-        }
-        return defaultValue;
-      }
-    }
+    return value;
   }
 
   available (inputSubcontext) {
@@ -123,19 +110,7 @@ class ExecutionContext {
 
     inputSubcontext = inputSubcontext.__unbox__();
 
-    if (inputSubcontext._disconnected) {
-      throw new common.PipelineError(`value at ${inputSubcontext._path.join('.')} is disconnected`);
-    }
-
-    try {
-      inputSubcontext.evaluate({runtime: this.runtime, recursive: false, resolve: true});
-
-      return true;
-    } catch (e) {
-      if (e instanceof common.NoSuchPathError) {
-        return false;
-      }
-    }
+    return inputSubcontext.available({runtime: this.runtime});
   }
 }
 

@@ -13,45 +13,88 @@ const dynamic = require('./regl-plumbing-dynamic.js');
 
 const EventEmitter = require('events');
 
-function levelOrdering (node0) {
-  assert(node0 instanceof SugarNode);
+function computeDigraph (node0) {
+  let digraph = {
+    ins: new Map(),
+    outs: new Map(),
+    nodes: new Set()
+  };
 
-  let seen = new Set();
-
-  let levels = [[node0]];
-
-  let currentLevel = levels[0];
-
-  while (currentLevel.length > 0) {
-    let nextLevel = [];
-
-    for (let snode of currentLevel) {
-      let parents = snode.inSNodes();
-      nextLevel = nextLevel.concat(parents);
+  function addNode (node) {
+    if (!digraph.nodes.has(node)) {
+      digraph.nodes.add(node);
+      digraph.ins.set(node, new Set());
+      digraph.outs.set(node, new Set());
     }
-
-    nextLevel.forEach((snode) => { assert(snode instanceof SugarNode); });
-
-    nextLevel = nextLevel.filter((snode) => !seen.has(snode));
-
-    nextLevel.forEach((snode) => seen.add(snode));
-
-    levels.push(nextLevel);
-
-    currentLevel = nextLevel;
   }
 
-  levels.reverse();
+  addNode(node0);
+  let tovisit = [node0];
+  let seen = new Set([node0]);
 
-  levels = levels.filter((level) => level.length > 0);
+  while (tovisit.length > 0) {
+    let node = tovisit.pop();
+    assert(digraph.nodes.has(node));
 
-  return levels;
+    let parents = node.inSNodes();
+
+    parents.forEach((pnode) => addNode(pnode));
+
+    let ins = digraph.ins.get(node);
+    parents.forEach((pnode) => {
+      ins.add(pnode);
+      digraph.outs.get(pnode).add(node);
+    });
+
+    let newNodes = parents.filter((pnode) => !seen.has(pnode));
+
+    newNodes.forEach((pnode) => tovisit.push(pnode));
+  }
+
+  return digraph;
 }
 
-function ordering (node) {
-  let levels = levelOrdering(node);
+function * ordering (node0) {
+  assert(node0 instanceof SugarNode);
 
-  return levels.reduce((results, level) => results.concat(level), []);
+  // let digraph0 = computeDigraph(node0);
+  let digraph = computeDigraph(node0);
+
+  let rootsSet = new Set(Array.from(digraph.nodes).filter((node) => digraph.ins.get(node).size === 0));
+  let roots = Array.from(rootsSet);
+  let seen = new Set(roots);
+
+  while (roots.length > 0) {
+    let current = roots.pop();
+    rootsSet.delete(current);
+
+    // this is a current root, so it should have no dependents
+    assert(digraph.ins.get(current).size === 0);
+
+    yield current;
+
+    let outs = Array.from(digraph.outs.get(current));
+
+    // remove the forward edges
+    digraph.outs.get(current).clear();
+
+    for (let child of outs) {
+      seen.add(child);
+
+      // remove the back edge
+      digraph.ins.get(child).delete(current);
+
+      if (digraph.ins.get(child).size === 0) {
+        roots.push(child);
+        rootsSet.add(child);
+      }
+    }
+  }
+
+  for (let node of digraph.nodes) {
+    assert(digraph.ins.get(node).size === 0);
+    assert(digraph.outs.get(node).size === 0);
+  }
 }
 
 class SugarNode {

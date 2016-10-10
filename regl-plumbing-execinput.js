@@ -18,11 +18,7 @@ class ExecutionInputSubcontext {
     this.pipeline = pipeline;
     this.executionContext = executionContext;
     this.nodeInputContext = nodeInputContext;
-    // this._args = args;
     this._path = clone(path);
-    // this._dynamic = dynamic;
-    // this._disconnected = disconnected;
-    // this._terminal = terminal;
   }
 
   evaluate ({runtime, recursive, resolve}) {
@@ -35,31 +31,13 @@ class ExecutionInputSubcontext {
     return result;
   }
 
-  // dynamic({recursive = false} = {}) {
-  //   if (!recursive) {
-  //     return this._dynamic;
-  //   }
+  available ({runtime}) {
+    assert(runtime === 'dynamic' || runtime === 'static');
 
-  //   if (this._dynamic) {
-  //     return true;
-  //   }
+    let result = this.nodeInputContext.__unbox__().available({runtime});
 
-  //   if (this._terminal || this._disconnected) {
-  //     return false;
-  //   }
-
-  //   if (!this.hasPath(this._args, this._path)) {
-  //     throw new PipelineError(`Something is wrong, no such path, but it is not a disconnected`);
-  //   }
-
-  //   let value = this.getPath(this._args, this._path);
-
-  //   for (let key of Object.keys(value)) {
-  //     let child = this.__getitem__(key);
-
-  //     return child[key].__unbox__().dynamic();
-  //   }
-  // }
+    return result;
+  }
 
   __hasitem__ (subscript) {
     return util.__hasitem__.apply(this, [subscript]);

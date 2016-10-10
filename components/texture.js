@@ -1,5 +1,5 @@
 
-let {Component} = require('../component.js');
+const {Component} = require('../regl-plumbing-component.js');
 
 class Texture extends Component {
   constructor ({pipeline}) {

@@ -65,7 +65,7 @@ class Group extends Component {
     this.chainArgs.entry.i.__unbox__().setValue(context.i.__unbox__().getValue({runtime: 'static'}));
 
     this.group.forEach(function ({name, node}) {
-      node.compile();
+      node.compile({recursive: false});
     });
 
     return this.chainArgs.exit.o.__unbox__().getValue({runtime: 'static'});
@@ -73,7 +73,7 @@ class Group extends Component {
 
   execute ({context}) {
     this.group.forEach(function ({name, node}) {
-      node.execute();
+      node.execute({recursive: false});
     });
   }
 

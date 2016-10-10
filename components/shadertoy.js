@@ -1,5 +1,5 @@
 
-const {Component} = require('../component.js');
+const {Component} = require('../regl-plumbing-component.js');
 const quad = require('glsl-quad');
 
 

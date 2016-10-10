@@ -37,6 +37,8 @@ class NodeInputContext extends Function {
     this._dynamicValue = {};
 
     assert(this.rootNode() instanceof NodeInputContext);
+
+    Object.seal(this);
   }
 
   __hasitem__ (subscript) {
@@ -229,6 +231,60 @@ class NodeInputContext extends Function {
     }
   }
 
+  available ({runtime}) {
+    assert(runtime === 'dynamic' || runtime === 'static');
+
+    let path = this._path;
+
+    let nodeInputContext = this;
+
+    if (runtime === 'static') {
+      common.checkLeafs({value: nodeInputContext.rootNode()._staticValue, allowedTypes: [dynamic.Dynamic]});
+
+      let value = nodeInputContext.rootNode()._staticValue;
+
+      let cur = value;
+
+      for (let part of path) {
+        if (cur instanceof dynamic.Dynamic) {
+          return false;
+        }
+
+        if (!(cur instanceof Object) || !cur.hasOwnProperty(part)) {
+          return false;
+        }
+        cur = cur[part];
+      }
+
+      return true;
+    } else if (runtime === 'dynamic') {
+      common.checkLeafs({value: nodeInputContext.rootNode()._dynamicValue, allowedTypes: []});
+
+      let value = nodeInputContext.rootNode()._dynamicValue;
+
+      common.checkLeafs({value: value, allowedTypes: []});
+
+      let cur = value;
+
+      for (let part of path) {
+        // the _dynamicValue tree shouldn't have any dynamics left, they
+        // should have been evaluated, thats the point of the _dynamicValue.
+        assert(!(cur instanceof dynamic.Dynamic));
+        assert(!(Type.is(cur, dynamic.Dynamic)));
+        assert(!(Type.instance(cur, dynamic.Dynamic)));
+
+        if (!(cur instanceof Object) || !cur.hasOwnProperty(part)) {
+          return false;
+        }
+        cur = cur[part];
+      }
+
+      common.checkLeafs({value: cur, allowedTypes: []});
+
+      return true;
+    }
+  }
+
   evaluate ({runtime, recursive, resolve, path}) {
     assert(runtime === 'dynamic' || runtime === 'static');
     assert(recursive === true || recursive === false);
@@ -242,9 +298,9 @@ class NodeInputContext extends Function {
     let nodeInputContext = this;
 
     if (runtime === 'static') {
-      common.checkLeafs({value: this.rootNode()._staticValue, allowedTypes: [dynamic.Dynamic]});
+      common.checkLeafs({value: nodeInputContext.rootNode()._staticValue, allowedTypes: [dynamic.Dynamic]});
 
-      let value = this.rootNode()._staticValue;
+      let value = nodeInputContext.rootNode()._staticValue;
 
       let cur = value;
 
@@ -274,9 +330,9 @@ class NodeInputContext extends Function {
 
       return cur;
     } else if (runtime === 'dynamic') {
-      common.checkLeafs({value: this.rootNode()._dynamicValue, allowedTypes: []});
+      common.checkLeafs({value: nodeInputContext.rootNode()._dynamicValue, allowedTypes: []});
 
-      let value = this.rootNode()._dynamicValue;
+      let value = nodeInputContext.rootNode()._dynamicValue;
 
       common.checkLeafs({value: value, allowedTypes: []});
 

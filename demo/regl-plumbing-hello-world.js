@@ -21,8 +21,8 @@ scramble.i.texture = src.o;
 scramble.i.framebuffer = fbo.o;
 scramble.i.iSubpassShape = [3, 2];
 
-// canvas.i.texture = scramble.o.framebuffer;
-canvas.i.texture = src.o;
+canvas.i.texture = scramble.o.framebuffer;
+// canvas.i.texture = src.o;
 
 regl.frame(function () {
   if (canvas.executing) {

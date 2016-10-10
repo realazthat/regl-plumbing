@@ -1,5 +1,5 @@
 
-const {Component} = require('../component.js');
+const {Component} = require('../regl-plumbing-component.js');
 const quad = require('glsl-quad');
 
 class Canvas extends Component {
@@ -71,7 +71,7 @@ class Canvas extends Component {
 
     let uniforms = {
       iChannel0: context.map(context.i.texture.regl.texture),
-      u_clip_y: -1
+      u_clip_y: +1
     };
 
     for (let channel of [0, 1, 2, 3]) {
