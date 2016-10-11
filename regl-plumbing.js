@@ -161,23 +161,19 @@ class SugarNode {
   }
 
   /**
-   * Compile the node, with arguments specified with `args`.
-   *
-   * `args` should be a dictionary of values.
+   * Compile the node.
 
-   * Values can also be specified via the `SugarNode.i.value = ...` syntax.
+   * Values can be specified via the `SugarNode.i.value = ...` syntax.
    *
-   * Using compile adds to and overrides those values.
    *
-   * Values needing to be set dynamically at runtime should
-   * be specified with `SugarNode.execute({key: value ...})` call.
+   * To set dynamic values, you can do something like:
+   * `let myDynamicValue = pipeline.dynamic(50);` then `SugarNode.i.value = myDynamicValue;`,
+   * then `SugarNode.compile({...})`, later updating `myDynamicValue`
+   * with `myDynamicValue.update(51)`, and updating each frame as necessary.
    *
-   * Alternatively, you can specify dynamic runtime arguments by calling
-   * `SugarNode.compile()` with a dictionary like `{key: function() { return 50; })}`;
-   * functions are automatically dynamic. Another way is to do something like:
-   * `let myDynamicValue = pipeline.dynamic({func: function() { return 50; })});` and
-   * then `SugarNode.compile({key: myDynamicValue})`, later updating `myDynamicValue`
-   * with `myDynamicValue.setValue(50)`, and updating each frame as necessary.
+   * Alternatively, `let myDynamicValue = 50; SugarNode.i.value = () => myDynamicValue;`,
+   * then `SugarNode.compile({...})`, later updating `myDynamicValue`
+   * with `myDynamicValue = 51`, and updating each frame as necessary.
    *
    * You can also use another node's output arguments as the input values.
    * So for example if you have node `a` and want to use `a.o.texture` as the
@@ -192,15 +188,14 @@ class SugarNode {
    *
    * To force it to be dynamic:
    *
-   * * `let theDynamicTexture = pipeline.dynamic({value: a.o.texture});`
+   * * `let theDynamicTexture = pipeline.dynamic(myreglTexture);`
    * * `b.i = {texture: theDynamicTexture};`
    * * `b.i.texture = theDynamicTexture;`
-   * * `b.i.texture = function() { return a.o.texture; };`
+   * * `b.i.texture = function() { return myreglTexture; };`
    * * `b.i.texture = () => a.o.texture;`
    * * `b.i({texture: theDynamicTexture});`
-   * * `b.compile({texture: theDynamicTexture});`
-   * * or don't set it via `b.i`, nor via `b.compile()` and instead set it
-   *   at runtime with `execute({texture: a.resolve(a.o.texture)})`.
+   * * `...`
+   * * `b.compile();`
    *
    * Note that not all arguments are allowed to be dynamic; it depends on the component.
    *
@@ -241,28 +236,40 @@ class SugarNode {
 
       common.checkLeafs({
         value: out,
-        allowedTypes: [dynamic.Dynamic, execinput.ExecutionInputSubcontext],
-        allowedTests: [({value}) => common.vtIsFunction({value})]
+        allowedTypes: [execinput.ExecutionInputSubcontext],
+        allowedTests: [common.vtIsFunction]
       });
 
-      out = util.maptree({
-        value: out,
-        leafVisitor: function ({value}) {
-          if (common.vtIsFunction({value})) {
-            return new dynamic.Dynamic({func: value});
-          }
+      function prep ({value}) {
+        value = util.maptree({
+          value,
+          leafVisitor: function ({value}) {
+            if (value instanceof execinput.ExecutionInputSubcontext) {
+              return common.vtEvaluatePlaceHolder({value, runtime: 'static', recursive: true, resolve: false});
+            }
 
-          if (value instanceof execinput.ExecutionInputSubcontext) {
-            return common.vtEvaluatePlaceHolder({value, runtime: 'static', recursive: true, resolve: false});
+            return value;
           }
+        });
+        value = util.maptree({
+          value,
+          leafVisitor: function ({value}) {
+            if (common.vtIsFunction({value})) {
+              return new dynamic.Dynamic({func: value});
+            }
 
-          return value;
-        }
-      });
+            return value;
+          }
+        });
+        return value;
+      }
+
+      out = prep({value: out});
 
       common.checkLeafs({
         value: out,
-        allowedTypes: [dynamic.Dynamic]
+        allowedTypes: [dynamic.Dynamic],
+        allowedTests: []
       });
 
       snode.o.__unbox__().setValue(out);
@@ -310,7 +317,7 @@ class SugarNode {
       throw new common.PipelineError('You must compile this component first before executing it');
     }
 
-    snode.context.__unbox__().runtime = 'dynamic';
+    snode.context.__unbox__().runtime('dynamic');
     snode.i.__unbox__().compute({runtime: 'dynamic'});
 
     snode.component.execute({context: this.context});
@@ -334,6 +341,8 @@ class Pipeline extends EventEmitter {
     this._components.set('mts-scramble', require('./components/mts-scramble.js'));
     this._components.set('canvas', require('./components/canvas.js'));
     this._components.set('pass', require('./components/pass.js'));
+    this._components.set('degamma', require('./components/degamma.js'));
+    this._components.set('regamma', require('./components/regamma.js'));
   }
 
   /**
@@ -349,6 +358,10 @@ class Pipeline extends EventEmitter {
 
     const ComponentClass = pipeline._components.get(component);
     return new Proxy(new SugarNode({pipeline, component: new ComponentClass({pipeline})}), util.accessHandler);
+  }
+
+  dynamic (value) {
+    return new dynamic.Dynamic({value: value});
   }
 }
 

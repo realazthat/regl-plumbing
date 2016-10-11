@@ -98,10 +98,10 @@ class NodeInputContext extends Function {
     common.checkLeafs({
       value,
       allowedTypes: [dynamic.Dynamic, nodeoutput.NodeOutputContext],
-      allowedTests: [(value) => !common.vtIsFunction({value})]
+      allowedTests: [common.vtIsFunction]
     });
 
-    util.maptree({
+    value = util.maptree({
       value,
       leafVisitor: function ({value}) {
         if (common.vtIsFunction({value})) {
@@ -276,6 +276,20 @@ class NodeInputContext extends Function {
     }
   }
 
+  __box__ () {
+    return new Proxy(this, util.accessHandler);
+  }
+
+  make ({path}) {
+    let cur = this.rootNode().__box__();
+
+    for (let part of path) {
+      cur = cur.__unbox__().__getitem__(part);
+    }
+
+    return cur;
+  }
+
   evaluate ({runtime, recursive, resolve, path}) {
     assert(runtime === 'dynamic' || runtime === 'static');
     assert(recursive === true || recursive === false);
@@ -284,9 +298,13 @@ class NodeInputContext extends Function {
     // assert(resolve || runtime === 'static');
     assert(path === undefined);
 
-    path = this._path;
-
     let nodeInputContext = this;
+
+    if (nodeInputContext.node().context.runtime() === 'static' && runtime === 'dynamic') {
+      throw new common.PipelineError('Cannot evaluate this dynamically when you are in static mode.');
+    }
+
+    path = nodeInputContext._path;
 
     if (runtime === 'static') {
       common.checkLeafs({value: nodeInputContext.rootNode()._staticValue, allowedTypes: [dynamic.Dynamic]});
@@ -315,8 +333,23 @@ class NodeInputContext extends Function {
                                          ` ${Object.keys(errors).join(',')} are invalid types`);
         }
       } else {
-        // TODO: should prolly make all these Functions ...
         common.checkLeafs({value: cur, allowedTypes: [dynamic.Dynamic]});
+
+        cur = util.maptree({
+          value: cur,
+          leafVisitor: function ({value, path}) {
+            if (value instanceof dynamic.Dynamic) {
+              let valuePath = clone(nodeInputContext._path).concat(path);
+              return function () {
+                let nic = nodeInputContext.make({path: valuePath});
+                return nic.__unbox__().evaluate({runtime: 'dynamic', recursive: true, resolve: true});
+              };
+            }
+            return value;
+          }
+        });
+
+        common.checkLeafs({value: cur, allowedTypes: [], allowedTests: [common.vtIsFunction]});
       }
 
       return cur;

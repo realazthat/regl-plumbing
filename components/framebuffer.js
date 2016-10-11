@@ -10,11 +10,12 @@ class Framebuffer extends Component {
   }
 
   compile ({context}) {
+    let texture = context.resolve(context.i.texture.regl.texture);
     let depth = context.resolve(context.i.depth);
     let stencil = context.resolve(context.i.stencil);
 
     let framebuffer = this.pipeline.regl.framebuffer({
-      color: context.map(context.i.texture.regl.texture),
+      color: texture,
       depth,
       stencil
     });

@@ -150,16 +150,16 @@ function vtEvaluatePlaceHolder ({value, runtime, recursive, resolve}) {
   }
 }
 
+function vtIsFunction ({value}) {
+  return value instanceof Function && Type.is(value, Function) && !specialTerminalTests.some((test) => test({value}));
+}
+
 function vtIsTerminalValue ({value}) {
   if (specialTerminalTests.some((test) => test({value}))) {
     return true;
   }
 
-  return !vtIsNode({value}) && !vtIsValuePlaceHolder({value}) && !(Type.is(value, Function));
-}
-
-function vtIsFunction ({value}) {
-  return value instanceof Function && Type.is(value, Function) && !specialTerminalTests.some((test) => test({value}));
+  return !vtIsNode({value}) && !vtIsValuePlaceHolder({value}) && !vtIsFunction({value});
 }
 
 function vtIsDynamic ({value, recursive}) {
@@ -295,15 +295,19 @@ function getDefaultDeniedTypes () {
 }
 
 let defaultDeniedTests = [
-  ({value}) => vtIsFunction({value})
+  vtIsFunction
 ];
 
+function vtIsReglValue ({value}) {
+  return value !== undefined && value !== null && value.hasOwnProperty instanceof Function && value.hasOwnProperty('_reglType');
+}
+
 let specialTerminalTests = [
-  ({value}) => value !== undefined && value !== null && value.hasOwnProperty instanceof Function && value.hasOwnProperty('_reglType')
+  vtIsReglValue
 ];
 
 let defaultAllowedTests = [
-  ({value}) => vtIsTerminalValue({value})
+  // ({value}) => vtIsTerminalValue({value})
 ];
 
 function checkLeafs ({
@@ -359,10 +363,10 @@ module.exports.vtIsNode = vtIsNode;
 module.exports.vtIsTerminalValue = vtIsTerminalValue;
 module.exports.vtIsValuePlaceHolder = vtIsValuePlaceHolder;
 module.exports.vtEvaluatePlaceHolder = vtEvaluatePlaceHolder;
+module.exports.vtIsReglValue = vtIsReglValue;
 
-// module.exports.specialTests = specialTests;
-// module.exports.specialTypes = specialTypes;
 module.exports.checkLeafs = checkLeafs;
+module.exports.specialTerminalTests = specialTerminalTests;
 
 module.exports.time = time;
 

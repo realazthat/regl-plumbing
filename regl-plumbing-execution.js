@@ -16,7 +16,7 @@ class ExecutionContext {
     assert(nodeInputContext instanceof nodeinput.NodeInputContext);
 
     this.pipeline = pipeline;
-    this.runtime = runtime;
+    this._runtime = runtime;
     this.nodeInputContext = nodeInputContext;
     this.i = new Proxy(new execinput.ExecutionInputSubcontext({pipeline, executionContext: this, nodeInputContext,
                                                      path: [], dynamic: false, disconnected: false,
@@ -25,6 +25,20 @@ class ExecutionContext {
     this.data = {};
 
     Object.seal(this);
+  }
+
+  runtime (runtime = util.NOVALUE) {
+    if (runtime !== util.NOVALUE) {
+      assert(runtime === 'static' || runtime === 'dynamic');
+
+      this._runtime = runtime;
+
+      return this._runtime;
+    }
+
+    assert(this._runtime === 'static' || this._runtime === 'dynamic');
+
+    return this._runtime;
   }
 
   __setitem__ (subscript, value) {
@@ -46,7 +60,7 @@ class ExecutionContext {
     assert(inputSubcontext instanceof ExecutionInputSubcontext);
     inputSubcontext = inputSubcontext.__unbox__();
 
-    if (this.runtime === 'static') {
+    if (this.runtime() === 'static') {
       let value = inputSubcontext.evaluate({runtime: 'static', recursive: true, resolve: false});
 
       if (common.vtIsDynamic({value, recursive: true})) {
@@ -59,22 +73,24 @@ class ExecutionContext {
         value = func(value);
         return value;
       }
-    } else if (this.runtime === 'dynamic') {
+    } else if (this.runtime() === 'dynamic') {
       let value = inputSubcontext.evaluate({runtime: 'dynamic', recursive: true, resolve: true});
 
       value = func(value);
       return value;
+    } else {
+      assert(false);
     }
   }
 
   resolve (inputSubcontext) {
     let {ExecutionInputSubcontext} = execinput;
     assert(inputSubcontext instanceof ExecutionInputSubcontext);
-    assert(this.runtime === 'static' || this.runtime === 'dynamic');
+    assert(this.runtime() === 'static' || this.runtime() === 'dynamic');
 
     inputSubcontext = inputSubcontext.__unbox__();
 
-    let value = inputSubcontext.evaluate({runtime: this.runtime, recursive: true, resolve: true});
+    let value = inputSubcontext.evaluate({runtime: this.runtime(), recursive: true, resolve: true});
 
     common.checkLeafs({value, allowedTypes: []});
 
@@ -84,20 +100,20 @@ class ExecutionContext {
   shallow (inputSubcontext, defaultValue = util.NOVALUE) {
     let {ExecutionInputSubcontext} = execinput;
     assert(inputSubcontext instanceof ExecutionInputSubcontext);
-    assert(this.runtime === 'static' || this.runtime === 'dynamic');
+    assert(this.runtime() === 'static' || this.runtime() === 'dynamic');
 
     inputSubcontext = inputSubcontext.__unbox__();
 
-    if (!inputSubcontext.available({runtime: this.runtime}) && defaultValue !== util.NOVALUE) {
+    if (!inputSubcontext.available({runtime: this.runtime()}) && defaultValue !== util.NOVALUE) {
       return defaultValue;
     }
 
-    let value = inputSubcontext.evaluate({runtime: this.runtime, recursive: false, resolve: true});
+    let value = inputSubcontext.evaluate({runtime: this.runtime(), recursive: false, resolve: true});
 
     common.checkLeafs({
       value,
       allowedTypes: [],
-      allowedTests: [(value) => !common.vtIsFunction({value})]
+      allowedTests: [common.vtIsFunction]
     });
 
     return value;
@@ -106,11 +122,11 @@ class ExecutionContext {
   available (inputSubcontext) {
     let {ExecutionInputSubcontext} = execinput;
     assert(inputSubcontext instanceof ExecutionInputSubcontext);
-    assert(this.runtime === 'static' || this.runtime === 'dynamic');
+    assert(this.runtime() === 'static' || this.runtime() === 'dynamic');
 
     inputSubcontext = inputSubcontext.__unbox__();
 
-    return inputSubcontext.available({runtime: this.runtime});
+    return inputSubcontext.available({runtime: this.runtime()});
   }
 }
 
