@@ -13,7 +13,8 @@ class ReslTexture extends Component {
   compile ({context}) {
     let input = context.resolve(context.i);
 
-    let {src, flipY = true, format = 'rgba', type = 'uint8', min = 'nearest', mag = 'nearest', mipmap = false} = input;
+    let {src, flipY = true, format = 'rgba', type = 'uint8', min = 'nearest', mag = 'nearest', mipmap = false,
+         wrapS = 'clamp', wrapT = 'clamp'} = input;
 
     let component = this;
 
@@ -35,6 +36,8 @@ class ReslTexture extends Component {
               params.type = type;
               params.flipY = flipY;
               params.mipmap = mipmap;
+              params.wrapS = wrapS;
+              params.wrapT = wrapT;
 
               return component.pipeline.regl.texture(params);
             }
