@@ -357,6 +357,26 @@ function checkLeafs ({
   return errors;
 }
 
+class FunctionWrapper extends Function {
+  constructor (f) {
+    super();
+
+    this.f = f;
+
+    Object.seal(this);
+  }
+}
+
+function func (f) {
+  let handler = {
+    apply: function (obj, thisArg, argumentsList) {
+      return obj.f.apply(thisArg, argumentsList);
+    }
+  };
+
+  return new Proxy(new FunctionWrapper(f), handler);
+}
+
 module.exports.vtIsFunction = vtIsFunction;
 module.exports.vtIsDynamic = vtIsDynamic;
 module.exports.vtIsNode = vtIsNode;
@@ -369,6 +389,7 @@ module.exports.checkLeafs = checkLeafs;
 module.exports.specialTerminalTests = specialTerminalTests;
 
 module.exports.time = time;
+module.exports.func = func;
 
 module.exports.PipelineError = PipelineError;
 module.exports.NoSuchPathError = NoSuchPathError;

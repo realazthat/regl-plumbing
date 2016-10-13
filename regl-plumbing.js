@@ -334,6 +334,7 @@ class Pipeline extends EventEmitter {
     this.resl = resl;
 
     this._components = new Map();
+    this._components.set('fcomponent', require('./components/fcomponent.js'));
     this._components.set('resl-texture', require('./components/resl-texture.js'));
     this._components.set('texture', require('./components/texture.js'));
     this._components.set('framebuffer', require('./components/framebuffer.js'));
@@ -362,6 +363,10 @@ class Pipeline extends EventEmitter {
 
   dynamic (value) {
     return new dynamic.Dynamic({value: value});
+  }
+
+  func (f) {
+    return common.func(f);
   }
 }
 
