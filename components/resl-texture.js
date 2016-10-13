@@ -7,6 +7,7 @@ class ReslTexture extends Component {
     this.compileSync = false;
     this.executeSync = true;
     this.reentrant = true;
+    Object.freeze(this);
   }
 
   compile ({context}) {

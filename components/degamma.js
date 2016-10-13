@@ -33,6 +33,7 @@ class Degamma extends Group {
     this.compileSync = true;
     this.executeSync = true;
     this.reentrant = true;
+    Object.freeze(this);
   }
 
   chain ({entry, shadertoy, exit}) {

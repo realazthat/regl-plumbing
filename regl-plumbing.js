@@ -220,6 +220,8 @@ class SugarNode {
       return util.allSync(jobs);
     }
 
+    assert(Object.isFrozen(snode.component));
+
     snode.clearCompile();
     snode.compiling = true;
 

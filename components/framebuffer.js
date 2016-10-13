@@ -7,6 +7,7 @@ class Framebuffer extends Component {
     this.compileSync = true;
     this.executeSync = true;
     this.reentrant = true;
+    Object.freeze(this);
   }
 
   compile ({context}) {
@@ -35,7 +36,7 @@ class Framebuffer extends Component {
     };
   }
 
-  execute ({compiled}) {
+  execute ({context}) {
 
   }
 }

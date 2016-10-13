@@ -7,6 +7,7 @@ class PassComponent extends Component {
     this.compileSync = true;
     this.executeSync = true;
     this.reentrant = true;
+    Object.freeze(this);
   }
 
   compile ({context}) {

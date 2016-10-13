@@ -8,6 +8,7 @@ class Component {
     this.compileSync = true;
     this.executeSync = true;
     this.reentrant = false;
+    this.safe = false;
   }
 
   compile (args = {}) {
@@ -59,6 +60,8 @@ class Group extends Component {
     });
 
     this.chain(chainArgs);
+
+    Object.freeze(this);
   }
 
   compile ({context}) {
