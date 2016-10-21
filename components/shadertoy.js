@@ -36,11 +36,16 @@ class Shadertoy extends Component {
     let PAR = 1.0;
     let iResolution = [0, 0, PAR];
     let iViewport = [0, 0, 0, 0];
-    // let iChannelResolution = [[0,0,PAR],[0,0,PAR],[0,0,PAR],[0,0,PAR]];
-    // let iChannelViewport = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
 
-    iResolution = context.map(context.i.framebuffer.resolution.wh, (wh) => [wh[0], wh[1], PAR]);
-    iViewport = context.map(context.i.framebuffer.viewport, (viewport) => Array.from(viewport.xy).concat(viewport.wh));
+
+    let out = context.shallow(context.i.out);
+
+    iResolution[0] = context.map(out.resolution.wh, (wh) => wh[0]);
+    iResolution[1] = context.map(out.resolution.wh, (wh) => wh[1]);
+    iViewport[0] = context.map(out.viewport, (viewport) => viewport.xy[0]);
+    iViewport[1] = context.map(out.viewport, (viewport) => viewport.xy[1]);
+    iViewport[2] = context.map(out.viewport, (viewport) => viewport.wh[0]);
+    iViewport[3] = context.map(out.viewport, (viewport) => viewport.wh[1]);
 
     uniforms.iResolution = iResolution;
     uniforms.iViewport = iViewport;
@@ -119,14 +124,18 @@ class Shadertoy extends Component {
         width: iViewport[2],
         height: iViewport[3]
       },
-      framebuffer: context.map(context.i.framebuffer.regl.framebuffer)
+      framebuffer: context.map(out, (outTex) => context.framebuffer(outTex))
     });
 
     context.data.cmd = cmd;
 
     return {
-      framebuffer: context.i.framebuffer
+      out
     };
+  }
+
+  destroy ({context}) {
+    context.data.cmd.destroy();
   }
 
   execute ({context}) {

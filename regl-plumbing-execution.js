@@ -6,7 +6,7 @@ const assert = require('assert');
 const nodeinput = require('./regl-plumbing-nodeinput.js');
 const execinput = require('./regl-plumbing-execinput.js');
 // const execoutput = require('./regl-plumbing-execoutput.js');
-// const dynamic = require('./regl-plumbing-dynamic.js');
+const dynamic = require('./regl-plumbing-dynamic.js');
 const common = require('./regl-plumbing-common.js');
 const util = require('./regl-plumbing-util.js');
 
@@ -55,35 +55,90 @@ class ExecutionContext {
     return false;
   }
 
-  map (inputSubcontext, func = ((value) => value)) {
-    let {ExecutionInputSubcontext} = execinput;
-    assert(inputSubcontext instanceof ExecutionInputSubcontext);
-    inputSubcontext = inputSubcontext.__unbox__();
+  node () {
+    return this.nodeInputContext.__unbox__().node();
+  }
 
-    if (this.runtime() === 'static') {
-      let value = inputSubcontext.evaluate({runtime: 'static', recursive: true, resolve: false});
+  framebuffer (outTex) {
+    let {pipeline} = this;
+    let context = this;
 
-      if (common.vtIsDynamic({value, recursive: true})) {
-        return function () {
-          let value = inputSubcontext.evaluate({runtime: 'dynamic', recursive: true, resolve: true});
-          value = func(value);
-          return value;
-        };
-      } else {
-        value = func(value);
+    return context.map(outTex.regl.texture, (reglTexture) => {
+      return pipeline.framebuffer({node: context.node(), reglTexture: reglTexture});
+    });
+  }
+
+  map (value, func = ((value) => value)) {
+    let context = this;
+
+    value = util.maptree({
+      value,
+      leafVisitor: function ({value}) {
+        if (value instanceof execinput.ExecutionInputSubcontext) {
+          if (context.runtime() === 'static') {
+            return value.evaluate({runtime: 'static', recursive: true, resolve: false});
+          } else if (context.runtime() === 'dynamic') {
+            return value.evaluate({runtime: 'dynamic', recursive: true, resolve: true});
+          } else {
+            assert(false);
+          }
+        }
         return value;
       }
-    } else if (this.runtime() === 'dynamic') {
-      let value = inputSubcontext.evaluate({runtime: 'dynamic', recursive: true, resolve: true});
+    });
 
+    // now run the transform function on the result
+    if (common.vtIsDynamic({value, recursive: true})) {
+      return function () {
+        value = util.maptree({
+          value,
+          leafVisitor: function ({value}) {
+            if (value instanceof dynamic.Dynamic) {
+              return value.evaluate();
+            }
+
+            if (common.vtIsFunction({value})) {
+              return value();
+            }
+
+            return value;
+          }
+        });
+
+        return func(value);
+      };
+    } else {
       value = func(value);
       return value;
-    } else {
-      assert(false);
     }
   }
 
-  resolve (inputSubcontext) {
+  resolve (value) {
+    let context = this;
+
+    value = util.maptree({
+      value,
+      leafVisitor: function ({value}) {
+        if (common.vtIsFunction({value})) {
+          return value();
+        }
+
+        if (value instanceof dynamic.Dynamic) {
+          return value.evaluate();
+        }
+
+        if (value instanceof execinput.ExecutionInputSubcontext) {
+          return context.resolveSubcontext(value);
+        }
+
+        return value;
+      }
+    });
+
+    return value;
+  }
+
+  resolveSubcontext (inputSubcontext) {
     let {ExecutionInputSubcontext} = execinput;
     assert(inputSubcontext instanceof ExecutionInputSubcontext);
     assert(this.runtime() === 'static' || this.runtime() === 'dynamic');
@@ -98,16 +153,23 @@ class ExecutionContext {
   }
 
   shallow (inputSubcontext, defaultValue = util.NOVALUE) {
+    let {pipeline} = this;
+
     let {ExecutionInputSubcontext} = execinput;
     assert(inputSubcontext instanceof ExecutionInputSubcontext);
     assert(this.runtime() === 'static' || this.runtime() === 'dynamic');
 
-    inputSubcontext = inputSubcontext.__unbox__();
+    let context = this;
 
-    if (!inputSubcontext.available({runtime: this.runtime()}) && defaultValue !== util.NOVALUE) {
+    if (!context.available(inputSubcontext) && defaultValue !== util.NOVALUE) {
+      if (context.dynamicallyAvailable(inputSubcontext)) {
+        throw new pipeline.PipelineError('context.shallow(thing) but thing is not static');
+      }
+
       return defaultValue;
     }
 
+    inputSubcontext = inputSubcontext.__unbox__();
     let value = inputSubcontext.evaluate({runtime: this.runtime(), recursive: false, resolve: true});
 
     common.checkLeafs({
@@ -126,7 +188,58 @@ class ExecutionContext {
 
     inputSubcontext = inputSubcontext.__unbox__();
 
-    return inputSubcontext.available({runtime: this.runtime()});
+    return inputSubcontext.available({runtime: this.runtime(), terminalDynamic: false});
+  }
+
+  dynamicallyAvailable (inputSubcontext) {
+    let {ExecutionInputSubcontext} = execinput;
+    assert(inputSubcontext instanceof ExecutionInputSubcontext);
+    assert(this.runtime() === 'static' || this.runtime() === 'dynamic');
+
+    inputSubcontext = inputSubcontext.__unbox__();
+
+    return inputSubcontext.available({runtime: this.runtime(), terminalDynamic: true});
+  }
+
+  out ({inTex, outTex}) {
+    let context = this;
+    let {pipeline} = this;
+
+    inTex = context.shallow(inTex);
+
+    let template = {
+      type: inTex.type,
+      format: inTex.format,
+      min: inTex.min,
+      mag: inTex.mag,
+      mipmap: inTex.mipmap,
+      resolution: inTex.resolution,
+      viewport: inTex.viewport
+    };
+
+    if (context.dynamicallyAvailable(outTex.regl.texture)) {
+      return context.shallow(outTex);
+    }
+
+    if (!context.available(outTex)) {
+      template.regl = {
+        texture: pipeline.texture({template, node: context.node()})
+      };
+
+      return template;
+    }
+
+    outTex = context.shallow(outTex);
+
+    for (let key of Object.keys(outTex)) {
+      template[key] = outTex[key];
+    }
+
+    template.regl = {
+      texture: pipeline.texture({template, node: context.node()})
+    };
+
+    return template;
   }
 }
 

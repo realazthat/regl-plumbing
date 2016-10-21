@@ -21,6 +21,18 @@ function allSync (jobs) {
   );
 }
 
+function resolve (value, done) {
+  if (value instanceof Promise) {
+    value.then(function (resolved) {
+      done(null, resolved);
+    }).catch(function (err) {
+      done(err);
+    });
+  } else {
+    done(null, value);
+  }
+}
+
 /**
  * If you think of a nested dictionary as a tree, then this function will visit every node in the tree.
  *
@@ -93,6 +105,62 @@ function reducetree ({value, visitor, path = []}) {
   return maptree({value, path, leafVisitor, postVisitor});
 }
 
+function filtertree ({value, preVisitor = null, postVisitor = null, path = [], depth = 0, maxDepth = 10, missing = {}}) {
+  if (depth > maxDepth) {
+    throw new Error('Tree recursion reached maximum depth');
+  }
+
+  if (preVisitor && !preVisitor({value, path})) {
+    return missing;
+  }
+
+  let result = null;
+
+  if (!Type.is(value, Object) && !Type.is(value, Array)) {
+    result = value;
+  } else if (Type.is(value, Object)) {
+    result = {};
+
+    for (let key of Object.keys(value)) {
+      let childValue = value[key];
+
+      let childPath = clone(path).concat([key]);
+
+      childValue = filtertree({value: childValue, path: childPath, preVisitor, postVisitor, missing: NOVALUE, depth: depth + 1});
+
+      if (childValue === NOVALUE) {
+        continue;
+      }
+
+      result[key] = childValue;
+    }
+  } else if (Type.is(value, Array)) {
+    // result is the new resulting value list.
+    result = [];
+
+    for (let index = 0; index < value.length; ++index) {
+      let childValue = value[index];
+
+      let childPath = clone(path).concat([index]);
+
+      childValue = filtertree({value: childValue, path: childPath, preVisitor, postVisitor, missing: NOVALUE, depth: depth + 1});
+      if (childValue === NOVALUE) {
+        continue;
+      }
+
+      result.push(childValue);
+    }
+  } else {
+    assert(false);
+  }
+
+  if (postVisitor && !postVisitor({value: result, path})) {
+    return missing;
+  }
+
+  return result;
+}
+
 // a `__hasitem__()` is reused several times, so we use this one to avoid duplication of code.
 function __hasitem__ (subscript) {
   if (!Type.is(subscript, String)) {
@@ -109,6 +177,19 @@ function __hasitem__ (subscript) {
   }
 
   return true;
+}
+
+function clear (thing) {
+  if (Type.is(thing, Object)) {
+    for (let key of Object.keys(thing)) {
+      delete thing[key];
+    }
+  } else if (Type.is(thing, Array)) {
+    thing.splice(0);
+    assert(thing.length === 0);
+  } else {
+    assert(false);
+  }
 }
 
 // standard handler for the Proxy for syntax sugar stuff. Delegates to python-like
@@ -152,11 +233,15 @@ let accessHandler = {
 };
 
 // default argument; we use this special object so that undefined can be detected as a special case.
-const NOVALUE = {};
+class NOVALUET { }
+const NOVALUE = new NOVALUET();
 
 module.exports.allSync = allSync;
+module.exports.resolve = resolve;
 module.exports.accessHandler = accessHandler;
 module.exports.maptree = maptree;
 module.exports.reducetree = reducetree;
+module.exports.filtertree = filtertree;
 module.exports.__hasitem__ = __hasitem__;
 module.exports.NOVALUE = NOVALUE;
+module.exports.clear = clear;

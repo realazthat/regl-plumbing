@@ -21,20 +21,20 @@ class ExecutionInputSubcontext {
     this._path = clone(path);
   }
 
-  evaluate ({runtime, recursive, resolve}) {
+  evaluate ({runtime, recursive, resolve, missing = util.NOVALUE}) {
     assert(runtime === 'static' || runtime === 'dynamic');
     assert(recursive === true || recursive === false);
     assert(resolve === true || resolve === false);
 
-    let result = this.nodeInputContext.__unbox__().evaluate({runtime, recursive, resolve});
+    let result = this.nodeInputContext.__unbox__().evaluate({runtime, recursive, resolve, missing});
 
     return result;
   }
 
-  available ({runtime}) {
+  available ({runtime, terminalDynamic}) {
     assert(runtime === 'dynamic' || runtime === 'static');
 
-    let result = this.nodeInputContext.__unbox__().available({runtime});
+    let result = this.nodeInputContext.__unbox__().available({runtime, terminalDynamic});
 
     return result;
   }

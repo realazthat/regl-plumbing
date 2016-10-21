@@ -179,7 +179,7 @@ class NodeInputContext extends Function {
       }
 
       if (common.vtIsValuePlaceHolder({value})) {
-        value = common.vtEvaluatePlaceHolder({value, runtime, recursive: true, resolve: false});
+        value = common.vtEvaluatePlaceHolder({value, runtime, recursive: true, resolve: false, missing: common.DISCONNECTED});
         return value;
       }
 
@@ -211,6 +211,13 @@ class NodeInputContext extends Function {
       }
     }
 
+    // remove all DISCONNECTED stuff from the tree
+    result = common.collapseDisconnecteds({value: result});
+
+    if (result === common.DISCONNECTED) {
+      result = {};
+    }
+
     if (runtime === 'static') {
       this.rootNode()._staticValue = this.checkStaticResolvedValue(result);
       this.rootNode()._staticValueUpdated = common.time();
@@ -222,17 +229,18 @@ class NodeInputContext extends Function {
     }
   }
 
-  available ({runtime}) {
+  available ({runtime, terminalDynamic}) {
     assert(runtime === 'dynamic' || runtime === 'static');
+    assert(terminalDynamic === true || terminalDynamic === false);
 
     let path = this._path;
 
     let nodeInputContext = this;
 
     if (runtime === 'static') {
-      common.checkLeafs({value: nodeInputContext.rootNode()._staticValue, allowedTypes: [dynamic.Dynamic]});
-
       let value = nodeInputContext.rootNode()._staticValue;
+
+      common.checkLeafs({value, allowedTypes: [dynamic.Dynamic]});
 
       let cur = value;
 
@@ -247,13 +255,17 @@ class NodeInputContext extends Function {
         cur = cur[part];
       }
 
+      common.checkLeafs({value: cur, allowedTypes: [dynamic.Dynamic]});
+
+      if (cur instanceof dynamic.Dynamic) {
+        return terminalDynamic;
+      }
+
       return true;
     } else if (runtime === 'dynamic') {
-      common.checkLeafs({value: nodeInputContext.rootNode()._dynamicValue, allowedTypes: []});
-
       let value = nodeInputContext.rootNode()._dynamicValue;
 
-      common.checkLeafs({value: value, allowedTypes: []});
+      common.checkLeafs({value, allowedTypes: []});
 
       let cur = value;
 
@@ -261,8 +273,6 @@ class NodeInputContext extends Function {
         // the _dynamicValue tree shouldn't have any dynamics left, they
         // should have been evaluated, thats the point of the _dynamicValue.
         assert(!(cur instanceof dynamic.Dynamic));
-        assert(!(Type.is(cur, dynamic.Dynamic)));
-        assert(!(Type.instance(cur, dynamic.Dynamic)));
 
         if (!(cur instanceof Object) || !cur.hasOwnProperty(part)) {
           return false;
@@ -273,6 +283,8 @@ class NodeInputContext extends Function {
       common.checkLeafs({value: cur, allowedTypes: []});
 
       return true;
+    } else {
+      assert(false);
     }
   }
 
@@ -290,10 +302,14 @@ class NodeInputContext extends Function {
     return cur;
   }
 
-  evaluate ({runtime, recursive, resolve, path}) {
+  evaluate ({runtime, recursive, resolve, path, missing = util.NOVALUE}) {
     assert(runtime === 'dynamic' || runtime === 'static');
     assert(recursive === true || recursive === false);
     assert(resolve === true || resolve === false);
+
+    // TODO: remove this, its temporary to make sure we changed all the evaluate() calls
+    assert(missing !== undefined);
+
     // !resolve => runtime === 'static'
     // assert(resolve || runtime === 'static');
     assert(path === undefined);
@@ -318,9 +334,12 @@ class NodeInputContext extends Function {
           throw new common.PipelineError(`Cannot evaluate \`${path.join('.')}\` at static time; requires dynamic evaluation.`);
         }
         if (cur instanceof dynamic.Dynamic && resolve === false) {
-          return function () { return nodeInputContext.evaluate({runtime: 'dynamic', recursive: true, resolve: true}); };
+          return function () { return nodeInputContext.evaluate({runtime: 'dynamic', recursive: true, resolve: true, missing}); };
         }
         if (!(cur instanceof Object) || !cur.hasOwnProperty(part)) {
+          if (missing !== util.NOVALUE) {
+            return missing;
+          }
           throw new common.NoSuchPathError(`Cannot evaluate \`${path.join('.')}\` at static time; no such input, is this value connected?`);
         }
         cur = cur[part];
@@ -342,7 +361,7 @@ class NodeInputContext extends Function {
               let valuePath = clone(nodeInputContext._path).concat(path);
               return function () {
                 let nic = nodeInputContext.make({path: valuePath});
-                return nic.__unbox__().evaluate({runtime: 'dynamic', recursive: true, resolve: true});
+                return nic.__unbox__().evaluate({runtime: 'dynamic', recursive: true, resolve: true, missing});
               };
             }
             return value;
@@ -370,6 +389,9 @@ class NodeInputContext extends Function {
         assert(!(Type.instance(cur, dynamic.Dynamic)));
 
         if (!(cur instanceof Object) || !cur.hasOwnProperty(part)) {
+          if (missing !== util.NOVALUE) {
+            return missing;
+          }
           throw new common.NoSuchPathError(`Cannot evaluate \`${path.join('.')}\` at runtime time; no such input, is this value connected?`);
         }
         cur = cur[part];

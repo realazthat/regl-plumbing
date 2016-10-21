@@ -1,6 +1,8 @@
 
 module.exports = {};
 
+const common = module.exports;
+
 const assert = require('assert');
 
 const isPlainObject = require('is-plain-object');
@@ -108,7 +110,7 @@ function vtIsValuePlaceHolder ({value}) {
  * `recursive` - If the value should be resolved recursively down the tree (down through dictionaries or arrays);
  * `resolve` - requires the final result to not contain `Dynamic`s even if in static mode; if true will resolve them.
  */
-function vtEvaluatePlaceHolder ({value, runtime, recursive, resolve}) {
+function vtEvaluatePlaceHolder ({value, runtime, recursive, resolve, missing = util.NOVALUE}) {
   assert(runtime === 'static' || runtime === 'dynamic');
   assert(recursive === true || recursive === false);
   assert(resolve === true || resolve === false);
@@ -125,13 +127,13 @@ function vtEvaluatePlaceHolder ({value, runtime, recursive, resolve}) {
     if (isPlainObject({value})) {
       let result = {};
       for (let key of Object.keys(value)) {
-        result[key] = vtEvaluatePlaceHolder({value: value[key], runtime, recursive, resolve});
+        result[key] = vtEvaluatePlaceHolder({value: value[key], runtime, recursive, resolve, missing});
       }
       return result;
     } else if (Type.is(value, Array)) {
       let result = [];
       for (let key of Object.keys(value)) {
-        result.push(vtEvaluatePlaceHolder({value: value[key], runtime, recursive, resolve}));
+        result.push(vtEvaluatePlaceHolder({value: value[key], runtime, recursive, resolve, missing}));
       }
       return result;
     }
@@ -144,7 +146,7 @@ function vtEvaluatePlaceHolder ({value, runtime, recursive, resolve}) {
     }
     return value;
   } else if (vtIsValuePlaceHolder({value})) {
-    return value.__unbox__().evaluate({runtime, recursive, resolve});
+    return value.__unbox__().evaluate({runtime, recursive, resolve, missing});
   } else {
     assert(false);
   }
@@ -282,6 +284,12 @@ function vtIsDynamic ({value, recursive}) {
 //   });
 // }
 
+class DISCONNECTEDT {
+
+}
+
+const DISCONNECTED = new DISCONNECTEDT();
+
 function getDefaultDeniedTypes () {
   return [
     dynamic.Dynamic,
@@ -295,7 +303,9 @@ function getDefaultDeniedTypes () {
 }
 
 let defaultDeniedTests = [
-  vtIsFunction
+  vtIsFunction,
+  ({value}) => value === util.NOVALUE,
+  ({value}) => value === util.DISCONNECTED
 ];
 
 function vtIsReglValue ({value}) {
@@ -357,6 +367,58 @@ function checkLeafs ({
   return errors;
 }
 
+function collapseDisconnecteds ({value}) {
+  value = util.maptree({
+    value,
+    leafVisitor: function ({value, path}) {
+      return value;
+    },
+    postVisitor: function ({value, path}) {
+      if (Type.is(value, Object) && Object.keys(value).length === 1) {
+        let k = Object.keys(value)[1];
+        let v = value[k];
+
+        if (v === common.DISCONNECTED) {
+          return common.DISCONNECTED;
+        }
+      }
+
+      if (Type.is(value, Array) && value.length === 1) {
+        let v = value[0];
+
+        if (v === common.DISCONNECTED) {
+          return common.DISCONNECTED;
+        }
+      }
+
+      if (Type.is(value, Object)) {
+        let result = {};
+        for (let k of Object.keys(value)) {
+          if (value[k] === common.DISCONNECTED) {
+            continue;
+          }
+          result[k] = value[k];
+        }
+        return result;
+      }
+
+      if (Type.is(value, Array)) {
+        return value.filter((child) => child !== common.DISCONNECTED);
+      }
+
+      return value;
+    }
+  });
+
+  checkLeafs({
+    value,
+    deniedTypes: [],
+    deniedTests: [ ({value}) => value === common.DISCONNECTED ]
+  });
+
+  return value;
+}
+
 class FunctionWrapper extends Function {
   constructor (f) {
     super();
@@ -384,6 +446,9 @@ module.exports.vtIsTerminalValue = vtIsTerminalValue;
 module.exports.vtIsValuePlaceHolder = vtIsValuePlaceHolder;
 module.exports.vtEvaluatePlaceHolder = vtEvaluatePlaceHolder;
 module.exports.vtIsReglValue = vtIsReglValue;
+
+module.exports.DISCONNECTED = DISCONNECTED;
+module.exports.collapseDisconnecteds = collapseDisconnecteds;
 
 module.exports.checkLeafs = checkLeafs;
 module.exports.specialTerminalTests = specialTerminalTests;

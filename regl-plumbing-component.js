@@ -1,6 +1,7 @@
 
 // const assert = require('assert');
 const common = require('./regl-plumbing-common.js');
+const util = require('./regl-plumbing-util.js');
 
 class Component {
   constructor ({pipeline}) {
@@ -11,77 +12,114 @@ class Component {
     this.safe = false;
   }
 
-  compile (args = {}) {
+  compile ({context}) {
     throw common.PipelineError('Must implement compile(); borked your component man');
   }
 
-  execute (args = {}) {
+  destroy ({context}) {
+    throw common.PipelineError('Must implement destroy(); borked your component man');
+  }
+
+  execute ({context}) {
 
   }
 }
 
-// class GroupContext {
-//   constructor({pipeline}){
-//     this.i = new Proxy(new NodeOutputContext({pipeline}), util.accessHandler);
-//   }
-
-//   __hasitem__(subscript) {
-//     if (!Type.is(subscript, String)) {
-//       return false;
-//     }
-
-//     if (subscript === 'i') {
-//       return true;
-//     }
-
-//     return false;
-//   }
-
-//   __setitem__(subscript,value) {
-//     this[subscript].setValue(value);
-//   }
-// }
-
 class Group extends Component {
-  constructor ({pipeline, group}) {
+  constructor ({pipeline}) {
     super({pipeline});
     this.compileSync = true;
     this.executeSync = true;
     this.reentrant = false;
+  }
 
-    this.group = [{name: 'entry', component: 'pass'}].concat(group).concat([{name: 'exit', component: 'pass'}]);
-    this.group = this.group.map(function ({name, component}) {
-      return {name, node: pipeline.n(component)};
-    });
+  destroy ({context}) {
+    if (context.data.nodes) {
+      context.data.nodes.forEach(({name, node}) => { node.destroy(); });
 
-    let chainArgs = this.chainArgs = {};
-    this.group.forEach(function ({name, node}) {
-      chainArgs[name] = node;
-    });
+      util.clear(context.data.nodes);
+    }
 
-    this.chain(chainArgs);
+    if (context.data.chainArgs) {
+      util.clear(context.data.chainArgs);
+    }
 
-    Object.freeze(this);
+    if (context.data.group) {
+      util.clear(context.data.group);
+    }
   }
 
   compile ({context}) {
-    this.chainArgs.entry.i.__unbox__().setValue(context.i.__unbox__().getValue({runtime: 'static'}));
+    let {pipeline} = this;
 
-    this.group.forEach(function ({name, node}) {
-      node.compile({recursive: false});
+    this.destroy({context});
+
+    context.data.nodes = [];
+    let nodes = context.data.nodes;
+
+    context.data.chainArgs = {};
+    let chainArgs = context.data.chainArgs;
+
+    let elements = [];
+    if (context.available(context.i.elements)) {
+      elements = context.resolve(context.i.elements);
+    } else {
+      elements = this.elements();
+    }
+
+    context.data.elements = [{name: 'entry', component: 'pass'}].concat(elements).concat([{name: 'exit', component: 'pass'}]);
+    elements = context.data.elements;
+
+    let chain = this.chain;
+
+    if (context.available(context.i.chain)) {
+      chain = context.resolve(context.i.chain);
+    }
+
+    context.data.elements.forEach(function ({name, component}) {
+      let node = pipeline.n(component);
+
+      nodes.push({name, node});
     });
 
-    return this.chainArgs.exit.o.__unbox__().getValue({runtime: 'static'});
+    nodes.forEach(function ({name, node}) {
+      chainArgs[name] = node;
+    });
+
+    chain.apply(this, [chainArgs]);
+
+    chainArgs.entry.i.__unbox__().setValue(context.i.__unbox__().getValue({runtime: 'static'}));
+
+    let jobs = nodes.map(function ({name, node}) {
+      let job = () => node.compile({recursive: false});
+      return job;
+    });
+
+    // FIXME: why doesn't node.compile() return this correctly?
+    jobs.push(() => {
+      return chainArgs.exit.o.__unbox__().getValue({runtime: 'static'});
+    });
+
+    let result = util.allSync(jobs);
+
+    return result;
   }
 
   execute ({context}) {
-    this.group.forEach(function ({name, node}) {
-      node.execute({recursive: false});
+    let jobs = context.data.nodes.map(function ({name, node}) {
+      let job = () => node.execute({recursive: false});
+      return job;
     });
+
+    return util.allSync(jobs);
   }
 
-  chain ({group}) {
-    throw common.PipelineError('Must implement chain(); borked your Group component man');
+  elements () {
+    throw new common.PipelineError('Must implement elements(); borked your Group component man');
+  }
+
+  chain ({entry, stuff, exit}) {
+    throw new common.PipelineError('Must implement chain(); borked your Group component man');
   }
 
 }

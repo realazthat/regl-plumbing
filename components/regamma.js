@@ -3,9 +3,7 @@ const {Group} = require('../regl-plumbing-component.js');
 
 
 const code = `
-
   uniform float gamma;
-
 
   void mainImage (out vec4 fragColor, in vec2 fragCoord) {
 
@@ -18,17 +16,9 @@ const code = `
 
 `;
 
-class Degamma extends Group {
+class Regamma extends Group {
   constructor ({pipeline}) {
-    super({
-      pipeline,
-      group: [
-        {
-          name: 'shadertoy',
-          component: 'shadertoy'
-        }
-      ]
-    });
+    super({pipeline});
 
     this.compileSync = true;
     this.executeSync = true;
@@ -36,14 +26,40 @@ class Degamma extends Group {
     Object.freeze(this);
   }
 
-  chain ({entry, shadertoy, exit}) {
-    shadertoy.i.iChannel0 = entry.o.texture;
-    shadertoy.i.framebuffer = entry.o.framebuffer;
+  elements () {
+    return [
+      {
+        name: 'compiler',
+        component: 'fcomponent'
+      },
+      {
+        name: 'shadertoy',
+        component: 'shadertoy'
+      }
+    ];
+  }
+
+  chain ({entry, compiler, shadertoy, exit}) {
+    let {pipeline} = this;
+
+    compiler.i.in = entry.o.in;
+    compiler.i.out = entry.o.out;
+
+    compiler.i.compile = pipeline.func(function ({context}) {
+      let out = context.out({inTex: context.i.in, outTex: context.i.out});
+
+      return {
+        out
+      };
+    });
+
+    shadertoy.i.iChannel0 = entry.o.in;
+    shadertoy.i.out = compiler.o.out;
     shadertoy.i.uniforms = {gamma: entry.o.gamma};
     shadertoy.i.code = code;
 
-    exit.i.framebuffer = shadertoy.o.framebuffer;
+    exit.i.out = shadertoy.o.out;
   }
 }
 
-module.exports = Degamma;
+module.exports = Regamma;

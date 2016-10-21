@@ -1,6 +1,7 @@
 
 module.exports = {};
 
+const canonicalJSON = require('canonical-json');
 const _ = require('lodash');
 const assert = require('assert');
 const util = require('./regl-plumbing-util.js');
@@ -230,7 +231,7 @@ class SugarNode {
 
     let context = new Proxy(new execution.ExecutionContext({pipeline, nodeInputContext: snode.i, runtime: 'static'}),
                                            util.accessHandler);
-    // this.__unbox__().context = context;
+
     this.context = context;
 
     function finished (out) {
@@ -329,23 +330,175 @@ class SugarNode {
   }
 }
 
+class TextureManager {
+  constructor ({pipeline}) {
+    this.pipeline = pipeline;
+
+    // template => [reglTexture]
+    this.free = new Map();
+
+    // node => {reglTexture => template}
+    this.owned = new Map();
+
+    Object.freeze(this);
+  }
+
+  key ({template}) {
+    // TODO: strip viewport
+    return canonicalJSON(template);
+  }
+
+  get ({template, node}) {
+    let {pipeline} = this;
+    let key = this.key({template});
+
+    if (!this.free.has(key)) {
+      this.free.set(key, []);
+    }
+
+    if (!this.owned.has(node)) {
+      this.owned.set(node, new Map());
+    }
+
+    let frees = this.free.get(key);
+
+    let reglTexture = null;
+    if (frees.length > 0) {
+      reglTexture = frees.pop();
+    } else {
+      reglTexture = pipeline.regl.texture({
+        format: template.format,
+        type: template.type,
+        width: template.resolution.wh[0],
+        height: template.resolution.wh[1],
+        min: template.min,
+        mag: template.mag,
+        mipmap: template.mipmap
+      });
+    }
+
+    this.owned.get(node).set(reglTexture, template);
+
+    return reglTexture;
+  }
+
+  releaseNode ({node}) {
+    if (!this.owned.has(node)) {
+      return;
+    }
+
+    for (let reglTexture of this.owned.get(node)) {
+      this.release({node, reglTexture});
+    }
+  }
+
+  release ({node, reglTexture = null}) {
+    assert(this.owned.has(node));
+    assert(this.owned.get(node).has(reglTexture));
+
+    let template = this.owned.get(node).get(reglTexture);
+    let key = this.key({template});
+
+    if (!this.free.has(key)) {
+      this.free.set(key, []);
+    }
+
+    this.free.get(key).push(reglTexture);
+    this.owned.get(node).delete(reglTexture);
+  }
+}
+
+class FBOManager {
+  constructor ({pipeline}) {
+    this.pipeline = pipeline;
+
+    // [reglTexture]
+    this.free = [];
+
+    // node => {reglTexture}
+    this.owned = new Map();
+
+    Object.freeze(this);
+  }
+
+  // key(framebuffer) {
+  //   return canonicalJSON(framebuffer);
+  // }
+
+  get ({reglTexture, node}) {
+    if (!this.owned.has(node)) {
+      this.owned.set(node, new Set());
+    }
+
+    let fbo = null;
+    if (this.free.length > 0) {
+      fbo = this.free.pop();
+      fbo({color: reglTexture, depth: false, stencil: false});
+    } else {
+      fbo = this.pipeline.regl.framebuffer({
+        color: reglTexture,
+        depth: false,
+        stencil: false
+      });
+    }
+
+    this.owned.get(node).add(fbo);
+
+    return fbo;
+  }
+
+  release ({fbo, node}) {
+    assert(this.owned.has(node));
+    assert(this.owned.get(node).has(fbo));
+
+    this.free.push(fbo);
+    this.owned.get(node).delete(fbo);
+  }
+
+  releaseNode ({node}) {
+    if (!this.owned.has(node)) {
+      return;
+    }
+
+    for (let fbo of this.owned.get(node)) {
+      this.release({fbo, node});
+    }
+  }
+}
+
 class Pipeline extends EventEmitter {
   constructor ({regl, resl}) {
     super();
     this.regl = regl;
     this.resl = resl;
 
+    this.PipelineError = common.PipelineError;
+
     this._components = new Map();
+
+    // fundamental "meta" components
+    this._components.set('unroller', require('./components/unroller.js'));
+    this._components.set('switch', require('./components/switch.js'));
     this._components.set('fcomponent', require('./components/fcomponent.js'));
-    this._components.set('resl-texture', require('./components/resl-texture.js'));
-    this._components.set('texture', require('./components/texture.js'));
-    this._components.set('framebuffer', require('./components/framebuffer.js'));
-    this._components.set('shadertoy', require('./components/shadertoy.js'));
-    this._components.set('mts-scramble', require('./components/mts-scramble.js'));
-    this._components.set('canvas', require('./components/canvas.js'));
     this._components.set('pass', require('./components/pass.js'));
+
+    // core components
+    this._components.set('shadertoy', require('./components/shadertoy.js'));
+    this._components.set('framebuffer', require('./components/framebuffer.js'));
+    this._components.set('texture', require('./components/texture.js'));
+    this._components.set('resl-texture', require('./components/resl-texture.js'));
+    this._components.set('canvas', require('./components/canvas.js'));
+
+    // other components
+    this._components.set('mts-scramble', require('./components/mts-scramble.js'));
     this._components.set('degamma', require('./components/degamma.js'));
     this._components.set('regamma', require('./components/regamma.js'));
+    this._components.set('sat-pass', require('./components/sat-pass.js'));
+    this._components.set('sat', require('./components/sat.js'));
+
+    this._textureMgr = new TextureManager({pipeline: this});
+    this._fboMgr = new FBOManager({pipeline: this});
+    Object.freeze(this);
   }
 
   /**
@@ -369,6 +522,17 @@ class Pipeline extends EventEmitter {
 
   func (f) {
     return common.func(f);
+  }
+
+  // allocates a regl texture for specified node
+  texture ({template, node}) {
+    this._textureMgr.releaseNode({node});
+    return this._textureMgr.get({node, template});
+  }
+
+  framebuffer ({reglTexture, node}) {
+    this._fboMgr.releaseNode({node});
+    return this._fboMgr.get({reglTexture, node});
   }
 }
 

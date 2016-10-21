@@ -1,5 +1,6 @@
 
 const {Component} = require('../regl-plumbing-component.js');
+const util = require('../regl-plumbing-util.js');
 
 class Framebuffer extends Component {
   constructor ({pipeline}) {
@@ -21,6 +22,8 @@ class Framebuffer extends Component {
       stencil
     });
 
+    context.data.framebuffer = framebuffer;
+
     return {
       regl: {
         framebuffer: framebuffer,
@@ -34,6 +37,11 @@ class Framebuffer extends Component {
       mag: context.map(context.i.texture.mag),
       mipmap: context.map(context.i.texture.mag)
     };
+  }
+
+  destroy ({context}) {
+    context.data.framebuffer.destroy();
+    util.clear(context.data);
   }
 
   execute ({context}) {

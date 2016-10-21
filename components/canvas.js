@@ -64,16 +64,16 @@ class Canvas extends Component {
 
     let iChannelViewport0 = [0, 0, 0, 0];
     let iChannelResolution0 = [0, 0, 0];
-    iChannelViewport0[0] = context.map(context.i.texture.viewport.xy, (xy) => xy[0]);
-    iChannelViewport0[1] = context.map(context.i.texture.viewport.xy, (xy) => xy[1]);
-    iChannelViewport0[2] = context.map(context.i.texture.viewport.wh, (wh) => wh[0]);
-    iChannelViewport0[3] = context.map(context.i.texture.viewport.wh, (wh) => wh[1]);
-    iChannelResolution0[0] = context.map(context.i.texture.resolution.wh, (wh) => wh[0]);
-    iChannelResolution0[1] = context.map(context.i.texture.resolution.wh, (wh) => wh[1]);
+    iChannelViewport0[0] = context.map(context.i.in.viewport.xy, (xy) => xy[0]);
+    iChannelViewport0[1] = context.map(context.i.in.viewport.xy, (xy) => xy[1]);
+    iChannelViewport0[2] = context.map(context.i.in.viewport.wh, (wh) => wh[0]);
+    iChannelViewport0[3] = context.map(context.i.in.viewport.wh, (wh) => wh[1]);
+    iChannelResolution0[0] = context.map(context.i.in.resolution.wh, (wh) => wh[0]);
+    iChannelResolution0[1] = context.map(context.i.in.resolution.wh, (wh) => wh[1]);
     iChannelResolution0[2] = PAR;
 
     let uniforms = {
-      iChannel0: context.map(context.i.texture.regl.texture),
+      iChannel0: context.map(context.i.in.regl.texture),
       u_clip_y: +1
     };
 

@@ -168,12 +168,17 @@ class NodeOutputContext {
     }
   }
 
-  evaluate ({runtime, recursive, resolve, path}) {
+  evaluate ({runtime, recursive, resolve, path, missing = util.NOVALUE}) {
     assert(runtime === 'static' || runtime === 'dynamic');
     assert(recursive === true || recursive === false);
     assert(resolve === true || resolve === false);
     // assert(resolve || runtime === 'static');
     assert(recursive === true);
+
+    // TODO: remove this
+    assert(missing !== undefined);
+
+    // TODO: remove this
     assert(path === undefined);
 
     let nodeOutputContext = this;
@@ -193,7 +198,7 @@ class NodeOutputContext {
 
       for (let part of path) {
         // if (cur === undefined) {
-        //   throw new common.PipelineError(`Cannot resolve ${this._path.join('.')} at static time; no such input, is this value connected?`)
+        //   throw new common.PipelineError(`Cannot resolve ${this._path.join('.')} at static time; no such output, is this value connected?`)
         // }
 
         if (cur instanceof dynamic.Dynamic && resolve === true) {
@@ -202,11 +207,13 @@ class NodeOutputContext {
 
         if (cur instanceof dynamic.Dynamic && resolve === false) {
           return cur;
-        //   return function() { return nodeOutputContext.evaluate({runtime: 'dynamic', recursive, resolve: true})};
         }
 
         if (!(cur instanceof Object) || !cur.hasOwnProperty(part)) {
-          throw new common.NoSuchPathError(`Cannot evaluate \`${path.join('.')}\` at static time; no such input, is this value connected?`);
+          if (missing !== util.NOVALUE) {
+            return missing;
+          }
+          throw new common.NoSuchPathError(`Cannot evaluate \`${path.join('.')}\` at static time; no such output, is this value connected?`);
         }
         cur = cur[part];
       }
@@ -241,7 +248,7 @@ class NodeOutputContext {
 
       for (let part of path) {
         // if (cur === undefined) {
-        //   throw new common.PipelineError(`Cannot resolve ${this._path.join('.')} at runtime time; no such input, is this value connected?`)
+        //   throw new common.PipelineError(`Cannot resolve ${this._path.join('.')} at runtime time; no such output, is this value connected?`)
         // }
 
         // the _dynamicValue tree shouldn't have any dynamics left, they
@@ -251,7 +258,11 @@ class NodeOutputContext {
         assert(!(Type.instance(cur, dynamic.Dynamic)));
 
         if (!cur.hasOwnProperty(part)) {
-          throw new common.PipelineError(`Cannot evaluate \`${path.join('.')}\` at runtime time; no such input, is this value connected?`);
+          if (missing !== util.NOVALUE) {
+            return missing;
+          }
+
+          throw new common.NoSuchPathError(`Cannot evaluate \`${path.join('.')}\` at runtime time; no such output, is this value connected?`);
         }
         cur = cur[part];
       }
