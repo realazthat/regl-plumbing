@@ -229,10 +229,14 @@ class SugarNode {
     let i = snode.i.__unbox__();
     i.compute({runtime: 'static'});
 
+    if (snode.context !== null) {
+      snode.component.destroy({context});
+    }
+
     let context = new Proxy(new execution.ExecutionContext({pipeline, nodeInputContext: snode.i, runtime: 'static'}),
                                            util.accessHandler);
 
-    this.context = context;
+    snode.context = context;
 
     function finished (out) {
       _.set(snode.cached, 'out', out);
@@ -373,6 +377,8 @@ class TextureManager {
         height: template.resolution.wh[1],
         min: template.min,
         mag: template.mag,
+        wrapT: template.wrapT,
+        wrapS: template.wrapS,
         mipmap: template.mipmap
       });
     }
@@ -420,10 +426,6 @@ class FBOManager {
 
     Object.freeze(this);
   }
-
-  // key(framebuffer) {
-  //   return canonicalJSON(framebuffer);
-  // }
 
   get ({reglTexture, node}) {
     if (!this.owned.has(node)) {
@@ -495,6 +497,13 @@ class Pipeline extends EventEmitter {
     this._components.set('regamma', require('./components/regamma.js'));
     this._components.set('sat-pass', require('./components/sat-pass.js'));
     this._components.set('sat', require('./components/sat.js'));
+    this._components.set('box-blur-adv', require('./components/box-blur-adv.js'));
+    this._components.set('gaussian-blur-adv', require('./components/gaussian-blur-adv.js'));
+    this._components.set('gaussian-blur-sep-pass', require('./components/gaussian-blur-sep-pass.js'));
+    this._components.set('gaussian-blur-sep', require('./components/gaussian-blur-sep.js'));
+    this._components.set('numerify', require('./components/numerify.js'));
+    this._components.set('delta', require('./components/delta.js'));
+    this._components.set('normalize', require('./components/normalize.js'));
 
     this._textureMgr = new TextureManager({pipeline: this});
     this._fboMgr = new FBOManager({pipeline: this});

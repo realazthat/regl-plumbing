@@ -8,16 +8,12 @@ const template = `
   uniform ivec2 direction;
   uniform int pass;
 
-  vec2 lerp(vec2 a, vec2 b, vec2 t) {
-    return mix(a,b,t);
-  }
-
   vec2 dst2src(vec2 dst_pos){
     // uv within the destination viewport
     vec2 dst_uv = (dst_pos - iViewport.xy)/iViewport.zw;
 
 
-    return lerp(iChannelViewport[0].xy, iChannelViewport[0].xy + iChannelViewport[0].zw, dst_uv);
+    return mix(iChannelViewport[0].xy, iChannelViewport[0].xy + iChannelViewport[0].zw, dst_uv);
   }
 
 
@@ -42,15 +38,15 @@ const template = `
     vec4 t[{{samples}}];
 
     for (int i = 0; i < {{samples}}; ++i) {
-      int d = i * int(pow(2.0, float(pass)));
+      int d = i * int(pow(float({{samples}}), float(pass)));
 
       vec2 dst_pos = dst_pos0 - vec2(d)*vec2(direction);
-
       vec2 src_pos = dst2src(dst_pos);
+
       vec2 src_uv = src_pos / iChannelResolution[0].xy;
       vec4 color = texture2D(iChannel0, src_uv);
 
-      if (any(lessThan(src_pos, iChannelViewport[0].xy)) || any(greaterThan(src_pos, iChannelViewport[0].xy + iChannelViewport[0].zw))){
+      if (any(lessThan(src_pos, iChannelViewport[0].xy)) || any(greaterThanEqual(src_pos, iChannelViewport[0].xy + iChannelViewport[0].zw))){
         color = vec4(0);
       }
 
@@ -58,6 +54,10 @@ const template = `
     }
 
     vec4 result = pyramid_addition(t);
+    // vec4 result = vec4(0);
+    // for (int i = 0; i < {{samples}}; ++i) {
+    //   result += t[i];
+    // }
 
     fragColor = result;
   }

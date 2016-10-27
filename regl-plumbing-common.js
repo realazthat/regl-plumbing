@@ -165,7 +165,17 @@ function vtIsTerminalValue ({value}) {
 }
 
 function vtIsDynamic ({value, recursive}) {
+  assert(recursive === true || recursive === false);
+
   if (value instanceof dynamic.Dynamic) {
+    return true;
+  }
+
+  if (vtIsTerminalValue({value})) {
+    return false;
+  }
+
+  if (vtIsFunction({value})) {
     return true;
   }
 
@@ -179,7 +189,7 @@ function vtIsDynamic ({value, recursive}) {
 
   if (vtIsNode({value})) {
     return util.reducetree({value, visitor: function ({value, path}) {
-      if (vtIsValuePlaceHolder({value})) {
+      if (vtIsDynamic({value, recursive: false})) {
         return true;
       }
       if (vtIsNode({value})) {

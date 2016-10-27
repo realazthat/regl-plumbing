@@ -60,6 +60,8 @@ class ReslTexture extends Component {
             type: type,
             min: min,
             mag: mag,
+            wrapT: wrapT,
+            wrapS: wrapS,
             mipmap: mipmap !== false
           });
         },

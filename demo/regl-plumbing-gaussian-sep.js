@@ -11,7 +11,7 @@ let src = pipeline.n('resl-texture');
 
 let degamma = pipeline.n('degamma');
 let regamma = pipeline.n('regamma');
-let gaussian = pipeline.n('gaussian-blur-adv');
+let gaussian = pipeline.n('gaussian-blur-sep');
 let canvas = pipeline.n('canvas');
 
 src.i.flipY = true;
@@ -24,10 +24,9 @@ degamma.i.in = src.o;
 degamma.i.gamma = window.props.gamma;
 degamma.i.out.type = 'float32';
 
-window.props.sigma = pipeline.dynamic(5);
-
 gaussian.i.in = degamma.o.out;
-gaussian.i.samples = 16;
+gaussian.i.radius = 16;
+window.props.sigma = pipeline.dynamic(2.0);
 gaussian.i.sigma = window.props.sigma;
 
 regamma.i.in = gaussian.o.out;

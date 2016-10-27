@@ -71,6 +71,12 @@ class ExecutionContext {
   map (value, func = ((value) => value)) {
     let context = this;
 
+    common.checkLeafs({
+      value,
+      allowedTypes: [dynamic.Dynamic, execinput.ExecutionInputSubcontext],
+      allowedTests: [common.vtIsFunction]
+    });
+
     value = util.maptree({
       value,
       leafVisitor: function ({value}) {
@@ -85,6 +91,12 @@ class ExecutionContext {
         }
         return value;
       }
+    });
+
+    common.checkLeafs({
+      value,
+      allowedTypes: [],
+      allowedTests: [common.vtIsFunction]
     });
 
     // now run the transform function on the result
@@ -103,6 +115,12 @@ class ExecutionContext {
 
             return value;
           }
+        });
+
+        common.checkLeafs({
+          value,
+          allowedTypes: [],
+          allowedTests: []
         });
 
         return func(value);
@@ -201,7 +219,7 @@ class ExecutionContext {
     return inputSubcontext.available({runtime: this.runtime(), terminalDynamic: true});
   }
 
-  out ({inTex, outTex}) {
+  out ({inTex, outTex, clone = false}) {
     let context = this;
     let {pipeline} = this;
 
@@ -212,12 +230,14 @@ class ExecutionContext {
       format: inTex.format,
       min: inTex.min,
       mag: inTex.mag,
+      wrapT: inTex.wrapT,
+      wrapS: inTex.wrapS,
       mipmap: inTex.mipmap,
       resolution: inTex.resolution,
       viewport: inTex.viewport
     };
 
-    if (context.dynamicallyAvailable(outTex.regl.texture)) {
+    if (!clone && context.dynamicallyAvailable(outTex.regl.texture)) {
       return context.shallow(outTex);
     }
 

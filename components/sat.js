@@ -37,9 +37,6 @@ class SAT extends Group {
     compiler.i.out = entry.o.out;
 
     compiler.i.compile = pipeline.func(function ({context}) {
-      let destroy = context.resolve(context.i.destroy);
-
-      destroy({context});
       context.data.nodes = [];
 
       let resolution = context.resolve(context.i.in.resolution);

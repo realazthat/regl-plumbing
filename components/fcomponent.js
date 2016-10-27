@@ -14,7 +14,7 @@ class FComponent extends Component {
   }
 
   compile ({context}) {
-    let {compile, execute} = context.resolve(context.i);
+    let {compile} = context.shallow(context.i);
 
     // if (Type.is(compile, String)) {
     //   compile = eval(compile);
@@ -24,7 +24,7 @@ class FComponent extends Component {
     //   execute = eval(execute);
     // }
 
-    context.data.execute = execute;
+    // context.data.execute = execute;
 
     if (compile) {
       let args = [{context}];
@@ -33,11 +33,13 @@ class FComponent extends Component {
   }
 
   execute ({context}) {
-    let {execute} = context.data;
+    if (context.available(context.i.execute)) {
+      let execute = context.resolve(context.i.execute);
 
-    if (execute) {
-      let args = [{context}];
-      return execute.apply(this, args);
+      if (execute) {
+        let args = [{context}];
+        return execute.apply(this, args);
+      }
     }
   }
 }

@@ -52,8 +52,6 @@ class Group extends Component {
   compile ({context}) {
     let {pipeline} = this;
 
-    this.destroy({context});
-
     context.data.nodes = [];
     let nodes = context.data.nodes;
 
