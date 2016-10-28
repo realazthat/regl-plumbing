@@ -9,6 +9,7 @@ const execinput = require('./regl-plumbing-execinput.js');
 const dynamic = require('./regl-plumbing-dynamic.js');
 const common = require('./regl-plumbing-common.js');
 const util = require('./regl-plumbing-util.js');
+const _ = require('lodash');
 
 class ExecutionContext {
   constructor ({pipeline, runtime, nodeInputContext}) {
@@ -219,7 +220,29 @@ class ExecutionContext {
     return inputSubcontext.available({runtime: this.runtime(), terminalDynamic: true});
   }
 
+  texture ({cascade}) {
+    let context = this;
+    let {pipeline} = this;
+
+    let template = {};
+
+    for (let sheet of cascade) {
+      template = _.merge(template, sheet);
+    }
+
+    if ('regl' in template) {
+      delete template.regl;
+    }
+
+    template.regl = {texture: pipeline.texture({template, node: context.node()})};
+
+    return template;
+  }
+
   out ({inTex, outTex, clone = false}) {
+    assert(inTex instanceof execinput.ExecutionInputSubcontext);
+    assert(outTex instanceof execinput.ExecutionInputSubcontext);
+
     let context = this;
     let {pipeline} = this;
 

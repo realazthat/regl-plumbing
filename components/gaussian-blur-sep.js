@@ -37,17 +37,31 @@ class GaussianBlurSep extends Group {
     compiler.i.out = entry.o.out;
 
     compiler.i.compile = pipeline.func(function ({context}) {
-      // we want a buffer just like `out` for the first step.
-      let out = context.out({inTex: context.i.in, outTex: context.i.out, clone: true});
+      // we want a buffer just like `in` for the first step.
 
-      return {out};
+
+      let inTex = context.shallow(context.i.in);
+
+      let tmpTex = {
+        resolution: {
+          wh: inTex.viewport.wh
+        },
+        viewport: {
+          xy: [0,0],
+          wh: inTex.viewport.wh
+        }
+      };
+
+      let tmp = context.texture({cascade: [inTex, tmpTex]});
+
+      return {tmp};
     });
 
     hgaussian.i.in = entry.o.in;
     hgaussian.i.direction = 'horizontal';
     hgaussian.i.sigma = entry.o.sigma;
     hgaussian.i.radius = entry.o.radius;
-    hgaussian.i.out = compiler.o.out;
+    hgaussian.i.out = compiler.o.tmp;
 
     vgaussian.i.in = hgaussian.o.out;
     vgaussian.i.direction = 'vertical';
