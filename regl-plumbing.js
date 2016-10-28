@@ -11,6 +11,7 @@ const nodeoutput = require('./regl-plumbing-nodeoutput.js');
 const execution = require('./regl-plumbing-execution.js');
 const execinput = require('./regl-plumbing-execinput.js');
 const dynamic = require('./regl-plumbing-dynamic.js');
+const {Component, Group} = require('./regl-plumbing-component.js');
 
 const EventEmitter = require('events');
 
@@ -479,35 +480,43 @@ class Pipeline extends EventEmitter {
     this._components = new Map();
 
     // fundamental "meta" components
-    this._components.set('unroller', require('./components/unroller.js'));
-    this._components.set('switch', require('./components/switch.js'));
-    this._components.set('fcomponent', require('./components/fcomponent.js'));
-    this._components.set('pass', require('./components/pass.js'));
+    // this.addComponent('unroller', require('./components/unroller.js'));
+    // this.addComponent('switch', require('./components/switch.js'));
+    this.addComponent('fcomponent', require('./components/fcomponent.js'));
+    this.addComponent('pass', require('./components/pass.js'));
 
     // core components
-    this._components.set('shadertoy', require('./components/shadertoy.js'));
-    this._components.set('framebuffer', require('./components/framebuffer.js'));
-    this._components.set('texture', require('./components/texture.js'));
-    this._components.set('resl-texture', require('./components/resl-texture.js'));
-    this._components.set('canvas', require('./components/canvas.js'));
+    this.addComponent('shadertoy', require('./components/shadertoy.js'));
+    this.addComponent('framebuffer', require('./components/framebuffer.js'));
+    this.addComponent('texture', require('./components/texture.js'));
+    this.addComponent('resl-texture', require('./components/resl-texture.js'));
+    this.addComponent('canvas', require('./components/canvas.js'));
 
     // other components
-    this._components.set('mts-scramble', require('./components/mts-scramble.js'));
-    this._components.set('degamma', require('./components/degamma.js'));
-    this._components.set('regamma', require('./components/regamma.js'));
-    this._components.set('sat-pass', require('./components/sat-pass.js'));
-    this._components.set('sat', require('./components/sat.js'));
-    this._components.set('box-blur-adv', require('./components/box-blur-adv.js'));
-    this._components.set('gaussian-blur-adv', require('./components/gaussian-blur-adv.js'));
-    this._components.set('gaussian-blur-sep-pass', require('./components/gaussian-blur-sep-pass.js'));
-    this._components.set('gaussian-blur-sep', require('./components/gaussian-blur-sep.js'));
-    this._components.set('numerify', require('./components/numerify.js'));
-    this._components.set('delta', require('./components/delta.js'));
-    this._components.set('normalize', require('./components/normalize.js'));
+    this.addComponent('mts-scramble', require('./components/mts-scramble.js'));
+    this.addComponent('degamma', require('./components/degamma.js'));
+    this.addComponent('regamma', require('./components/regamma.js'));
+    this.addComponent('sat-pass', require('./components/sat-pass.js'));
+    this.addComponent('sat', require('./components/sat.js'));
+    this.addComponent('box-blur-adv', require('./components/box-blur-adv.js'));
+    this.addComponent('gaussian-blur-adv', require('./components/gaussian-blur-adv.js'));
+    this.addComponent('gaussian-blur-sep-pass', require('./components/gaussian-blur-sep-pass.js'));
+    this.addComponent('gaussian-blur-sep', require('./components/gaussian-blur-sep.js'));
+    this.addComponent('numerify', require('./components/numerify.js'));
+    this.addComponent('delta', require('./components/delta.js'));
+    this.addComponent('normalize', require('./components/normalize.js'));
 
     this._textureMgr = new TextureManager({pipeline: this});
     this._fboMgr = new FBOManager({pipeline: this});
     Object.freeze(this);
+  }
+
+  addComponent (id, ctor) {
+    if (this._components.has(id)) {
+      throw new common.PipelineError(`Cannot add component with id "${id}", a component with that id already exists`);
+    }
+
+    this._components.set(id, ctor);
   }
 
   /**
@@ -548,3 +557,5 @@ class Pipeline extends EventEmitter {
 module.exports.Pipeline = Pipeline;
 module.exports.PipelineError = common.PipelineError;
 module.exports.private = {SugarNode};
+module.exports.Component = Component;
+module.exports.Group = Group;
