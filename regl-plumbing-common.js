@@ -152,6 +152,47 @@ function vtEvaluatePlaceHolder ({value, runtime, recursive, resolve, missing = u
   }
 }
 
+function vtHasFunctions ({value}) {
+  if (vtIsFunction({value})) {
+    return true;
+  }
+
+  return util.reducetree({
+    value,
+    visitor: function ({value}) {
+      if (vtIsFunction({value})) {
+        return true;
+      }
+      if (vtIsNode({value})) {
+        for (let key of Object.keys(value)) {
+          assert(value[key] === true || value[key] === false);
+          if (value[key]) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+  });
+}
+
+function vtEvaluateFunctions ({value}) {
+  if (vtIsFunction({value})) {
+    return value();
+  }
+
+  return util.maptree({
+    value,
+    leafVisitor: function ({value}) {
+      if (vtIsFunction({value})) {
+        return value();
+      }
+
+      return value;
+    }
+  });
+}
+
 function vtIsFunction ({value}) {
   return value instanceof Function && Type.is(value, Function) && !specialTerminalTests.some((test) => test({value}));
 }
@@ -450,6 +491,8 @@ function func (f) {
 }
 
 module.exports.vtIsFunction = vtIsFunction;
+module.exports.vtHasFunctions = vtHasFunctions;
+module.exports.vtEvaluateFunctions = vtEvaluateFunctions;
 module.exports.vtIsDynamic = vtIsDynamic;
 module.exports.vtIsNode = vtIsNode;
 module.exports.vtIsTerminalValue = vtIsTerminalValue;

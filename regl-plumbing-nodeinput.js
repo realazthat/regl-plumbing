@@ -101,19 +101,6 @@ class NodeInputContext extends Function {
       allowedTests: [common.vtIsFunction]
     });
 
-    value = util.maptree({
-      value,
-      leafVisitor: function ({value}) {
-        if (common.vtIsFunction({value})) {
-          assert(!common.vtIsTerminalValue({value}));
-
-          return new dynamic.Dynamic({func: value});
-        }
-
-        return value;
-      }
-    });
-
     return this.checkInjectionValue(value);
   }
 
@@ -122,7 +109,7 @@ class NodeInputContext extends Function {
     common.checkLeafs({
       value,
       allowedTypes: [dynamic.Dynamic, nodeoutput.NodeOutputContext],
-      allowedTests: []
+      allowedTests: [common.vtIsFunction]
     });
 
     return value;
@@ -169,53 +156,111 @@ class NodeInputContext extends Function {
     assert(runtime === 'dynamic' || runtime === 'static');
     assert(this.rootNode() === this);
 
-    function leafVisitor ({value}) {
-      assert(!common.vtIsNode({value}));
-
-      // check that this is not a Function that is also a class
-      // for example a regl texture, which is a function
-      if (common.vtIsTerminalValue({value})) {
-        return value;
-      }
-
+    function evaloutputs ({value}) {
       if (common.vtIsValuePlaceHolder({value})) {
         value = common.vtEvaluatePlaceHolder({value, runtime, recursive: true, resolve: false, missing: common.DISCONNECTED});
         return value;
       }
 
-      throw new common.PipelineError(`Don't know how to evaluate this node in the input argument tree ${value}`);
+      return value;
     }
 
-    // sort it shortest-to-longest
-    this.rootNode()._injections.sort(function (lhs, rhs) {
-      return (lhs.length - rhs.length);
-    });
+    function wrapFuncs ({value}) {
+      if (common.vtIsFunction({value})) {
+        return new dynamic.Dynamic({func: value});
+      }
+      return value;
+    }
+
+    function resolveDynamics ({value}) {
+      if (value instanceof dynamic.Dynamic) {
+        return value.evaluate();
+      }
+      return value;
+    }
 
     let result;
-    if (this.rootNode()._injections.length === 0) {
-      result = undefined;
-    } else if (this.rootNode()._injections.length === 1) {
-      let {path, value} = this.rootNode()._injections[0];
-      value = util.maptree({value, leafVisitor});
-      if (path.length === 0) {
-        result = value;
+
+    if (runtime === 'static') {
+      // sort it shortest-to-longest
+      this.rootNode()._injections.sort(function (lhs, rhs) {
+        return (lhs.length - rhs.length);
+      });
+
+      if (this.rootNode()._injections.length === 0) {
+        result = undefined;
+      } else if (this.rootNode()._injections.length === 1) {
+        let {path, value} = this.rootNode()._injections[0];
+        if (path.length === 0) {
+          result = value;
+        } else {
+          result = {};
+          _.set(result, path, value);
+        }
       } else {
         result = {};
-        _.set(result, path, value);
+        for (let {path, value} of this.rootNode()._injections) {
+          _.set(result, path, value);
+        }
       }
+
+      common.checkLeafs({
+        value: result,
+        allowedTypes: [dynamic.Dynamic, nodeoutput.NodeOutputContext],
+        allowedTests: [common.vtIsFunction]
+      });
+
+      result = util.maptree({
+        value: result,
+        leafVisitor: evaloutputs
+      });
+
+      // remove all DISCONNECTED stuff from the tree
+      result = common.collapseDisconnecteds({value: result});
+
+      if (result === common.DISCONNECTED) {
+        result = {};
+      }
+
+      common.checkLeafs({
+        value: result,
+        allowedTypes: [dynamic.Dynamic],
+        allowedTests: [common.vtIsFunction]
+      });
+
+      result = util.maptree({
+        value: result,
+        leafVisitor: wrapFuncs
+      });
+
+      common.checkLeafs({
+        value: result,
+        allowedTypes: [dynamic.Dynamic],
+        allowedTests: []
+      });
     } else {
-      result = {};
-      for (let {path, value} of this.rootNode()._injections) {
-        value = util.maptree({value, leafVisitor});
-        _.set(result, path, value);
-      }
-    }
+      // runtime is 'dynamic'
 
-    // remove all DISCONNECTED stuff from the tree
-    result = common.collapseDisconnecteds({value: result});
+      result = this.rootNode()._staticValue;
 
-    if (result === common.DISCONNECTED) {
-      result = {};
+      common.checkLeafs({
+        value: result,
+        allowedTypes: [dynamic.Dynamic],
+        allowedTests: []
+      });
+
+      result = util.maptree({
+        value: result,
+        leafVisitor: resolveDynamics
+      });
+
+      common.checkLeafs({
+        value: result,
+        allowedTypes: [],
+        allowedTests: []
+      });
+
+      result = this.checkStaticResolvedValue(result);
     }
 
     if (runtime === 'static') {

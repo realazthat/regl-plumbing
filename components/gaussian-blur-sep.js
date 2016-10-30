@@ -47,7 +47,7 @@ class GaussianBlurSep extends Group {
           wh: inTex.viewport.wh
         },
         viewport: {
-          xy: [0,0],
+          xy: [0, 0],
           wh: inTex.viewport.wh
         }
       };

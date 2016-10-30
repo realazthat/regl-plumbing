@@ -105,6 +105,28 @@ function reducetree ({value, visitor, path = []}) {
   return maptree({value, path, leafVisitor, postVisitor});
 }
 
+function mapsearch ({value, needle}) {
+  return reducetree({
+    value,
+    visitor: function ({value}) {
+      if (value === needle) {
+        return true;
+      }
+
+      if (Type.is(value, Object) || Type.is(value, Array)) {
+        for (let key of Object.keys(value)) {
+          assert(value[key] === true || value[key] === false);
+          if (value[key]) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    }
+  });
+}
+
 function filtertree ({value, preVisitor = null, postVisitor = null, path = [], depth = 0, maxDepth = 10, missing = {}}) {
   if (depth > maxDepth) {
     throw new Error('Tree recursion reached maximum depth');
@@ -242,6 +264,7 @@ module.exports.accessHandler = accessHandler;
 module.exports.maptree = maptree;
 module.exports.reducetree = reducetree;
 module.exports.filtertree = filtertree;
+module.exports.mapsearch = mapsearch;
 module.exports.__hasitem__ = __hasitem__;
 module.exports.NOVALUE = NOVALUE;
 module.exports.clear = clear;

@@ -132,39 +132,52 @@ class ExecutionContext {
     }
   }
 
-  resolve (value) {
+  resolve (value, missing = util.NOVALUE) {
     let context = this;
+
+    class THISNOVALUET {
+
+    }
+    let THISNOVALUE = new THISNOVALUET();
 
     value = util.maptree({
       value,
       leafVisitor: function ({value}) {
-        if (common.vtIsFunction({value})) {
-          return value();
-        }
+        // if (common.vtIsFunction({value})) {
+        //   return value();
+        // }
 
-        if (value instanceof dynamic.Dynamic) {
-          return value.evaluate();
-        }
+        // if (value instanceof dynamic.Dynamic) {
+        //   return value.evaluate();
+        // }
 
         if (value instanceof execinput.ExecutionInputSubcontext) {
-          return context.resolveSubcontext(value);
+          return context.resolveSubcontext(value, THISNOVALUE);
         }
 
         return value;
       }
     });
 
+    if (util.mapsearch({value, needle: THISNOVALUE})) {
+      if (missing !== util.NOVALUE) {
+        return missing;
+      }
+
+      throw new common.PipelineError('Cannot resolve value, it doesn\'t exist or has something dynamic');
+    }
+
     return value;
   }
 
-  resolveSubcontext (inputSubcontext) {
+  resolveSubcontext (inputSubcontext, missing = util.NOVALUE) {
     let {ExecutionInputSubcontext} = execinput;
     assert(inputSubcontext instanceof ExecutionInputSubcontext);
     assert(this.runtime() === 'static' || this.runtime() === 'dynamic');
 
     inputSubcontext = inputSubcontext.__unbox__();
 
-    let value = inputSubcontext.evaluate({runtime: this.runtime(), recursive: true, resolve: true});
+    let value = inputSubcontext.evaluate({runtime: this.runtime(), recursive: true, resolve: true, missing});
 
     common.checkLeafs({value, allowedTypes: []});
 

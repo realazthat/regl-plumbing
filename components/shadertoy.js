@@ -1,5 +1,6 @@
 
 const {Component} = require('../regl-plumbing-component.js');
+const common = require('../regl-plumbing-common.js');
 const quad = require('glsl-quad');
 
 
@@ -72,6 +73,17 @@ class Shadertoy extends Component {
       iChannelViewportI[3] = context.map(context.i[`iChannel${channel}`].viewport.wh[1]);
 
       uniforms[`iChannelViewport[${channel}]`] = iChannelViewportI;
+    }
+
+    // if any uniform values have anything dynamic in them, make the entire uniform value dynamic
+    for (let key of Object.keys(uniforms)) {
+      let value = uniforms[key];
+
+      if (common.vtHasFunctions({value, recursive: true})) {
+        uniforms[key] = function () {
+          return common.vtEvaluateFunctions({value});
+        };
+      }
     }
 
     let vert = `

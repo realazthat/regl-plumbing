@@ -206,7 +206,9 @@ class NodeOutputContext {
         }
 
         if (cur instanceof dynamic.Dynamic && resolve === false) {
-          return cur;
+          return function () {
+            return nodeOutputContext.evaluate({runtime: 'dynamic', recursive, resolve: true, missing});
+          };
         }
 
         if (!(cur instanceof Object) || !cur.hasOwnProperty(part)) {
@@ -232,6 +234,25 @@ class NodeOutputContext {
         common.checkLeafs({
           value: cur,
           allowedTypes: [dynamic.Dynamic]
+        });
+
+        cur = util.maptree({
+          value: cur,
+          leafVisitor: function ({value}) {
+            if (value instanceof dynamic.Dynamic) {
+              return function () {
+                return value.evaluate();
+              };
+            }
+
+            return value;
+          }
+        });
+
+        common.checkLeafs({
+          value: cur,
+          allowedTypes: [],
+          allowedTests: [common.vtIsFunction]
         });
       }
 
@@ -262,7 +283,7 @@ class NodeOutputContext {
             return missing;
           }
 
-          throw new common.NoSuchPathError(`Cannot evaluate \`${path.join('.')}\` at runtime time; no such output, is this value connected?`);
+          throw new common.NoSuchPathError(`Cannot evaluate \`${path.join('.')}\` at runtime=dynamic; no such output, is this value connected?`);
         }
         cur = cur[part];
       }
