@@ -176,16 +176,18 @@ function vtHasFunctions ({value}) {
   });
 }
 
-function vtEvaluateFunctions ({value}) {
+function vtEvaluateFunctions ({value, args}) {
+  assert(args instanceof Array);
+
   if (vtIsFunction({value})) {
-    return value();
+    return value(...args);
   }
 
   return util.maptree({
     value,
     leafVisitor: function ({value}) {
       if (vtIsFunction({value})) {
-        return value();
+        return value(...args);
       }
 
       return value;
@@ -470,6 +472,28 @@ function collapseDisconnecteds ({value}) {
   return value;
 }
 
+function readPixels ({regl, texture, viewport = null}) {
+  assert(vtIsReglValue({value: texture}));
+
+  let framebuffer = regl.framebuffer({
+    color: texture,
+    depth: false,
+    stencil: false
+  });
+
+  let result = {};
+
+  if (!viewport) {
+    result.buffer = regl.read({framebuffer});
+  } else {
+    result.buffer = regl.read({x: viewport.xy[0], y: viewport.xy[1], width: viewport.wh[0], height: viewport.wh[1], framebuffer});
+  }
+
+  framebuffer.destroy();
+
+  return result.buffer;
+}
+
 class FunctionWrapper extends Function {
   constructor (f) {
     super();
@@ -489,6 +513,104 @@ function func (f) {
 
   return new Proxy(new FunctionWrapper(f), handler);
 }
+
+// a submodule for texture-related stuff
+let texture = {
+
+  template: {
+    // base template (default) texture
+    base: {
+      type: 'uint8',
+      format: 'rgba',
+      min: 'nearest',
+      mag: 'nearest',
+      wrapT: 'clamp',
+      wrapS: 'clamp',
+      mipmap: false,
+      resolution: {wh: [1, 1]},
+      viewport: {xy: [0, 0], wh: [1, 1]}
+    },
+
+    invalid: function ({template, raise = false}) {
+      const mipmaps = new Set([true, false]);
+      const mins = new Set(['nearest', 'linear',
+                            'mipmap', 'linear mipmap linear',
+                            'nearest mipmap linear',
+                            'linear mipmap nearest',
+                            'nearest mipmap nearest']);
+      const mags = new Set(['nearest', 'linear']);
+      const wraps = new Set(['repeat', 'clamp', 'mirror']);
+      const types = new Set(['int8', 'int16', 'uint8', 'uint16', 'int32', 'uint32', 'float16', 'float32']);
+      const formats = new Set(['alpha', 'luminance', 'luminance alpha', 'rgb', 'rgba', 'rgba4', 'rgb5 a1', 'rgb565',
+                               'srgb', 'srgba', 'depth', 'depth stencil', 'rgb s3tc dxt1', 'rgba s3tc dxt1',
+                               'rgba s3tc dxt3', 'rgba s3tc dxt5', 'rgb atc', 'rgba atc explicit alpha',
+                               'rgba atc interpolated alpha', 'rgb pvrtc 4bppv1', 'rgb pvrtc 2bppv1',
+                               'rgba pvrtc 4bppv1', 'rgba pvrtc 2bppv1', 'rgb etc1']);
+
+      let issues = [];
+
+      if (!types.has(template.type)) {
+        issues.push(`missing or invalid type, type=${template.type}, valid types=${Array.from(types).join(',')}`);
+      }
+      if (!formats.has(template.format)) {
+        issues.push(`missing or invalid format, format=${template.format}, valid formats=${Array.from(formats).join(',')}`);
+      }
+      if (!wraps.has(template.wrapT)) {
+        issues.push(`missing or invalid wrapT, wrapT=${template.wrapT}, valid wraps=${Array.from(wraps).join(',')}`);
+      }
+      if (!wraps.has(template.wrapS)) {
+        issues.push(`missing or invalid wrapS, wrapS=${template.wrapS}, valid wraps=${Array.from(wraps).join(',')}`);
+      }
+      if (!mipmaps.has(template.mipmap)) {
+        issues.push(`missing or invalid mipmap, mipmap=${template.mipmap}, valid mipmaps=${Array.from(mipmaps).join(',')}`);
+      }
+      if (!mins.has(template.min)) {
+        issues.push(`missing or invalid min, min=${template.min}, valid mins=${Array.from(mins).join(',')}`);
+      }
+      if (!mags.has(template.min)) {
+        issues.push(`missing or invalid mag, mag=${template.mag}, valid mags=${Array.from(mags).join(',')}`);
+      }
+
+      function checkWH (wh) {
+        return (Type.is(wh, Array) &&
+                wh.length === 2 &&
+                wh.every((v) => v >= 0 && Number.isInteger(v)));
+      }
+
+      function checkXY (xy) {
+        return (Type.is(xy, Array) &&
+                xy.length === 2 &&
+                xy.every((v) => Number.isInteger(v)));
+      }
+
+      if (!Type.is(template.resolution, Object) ||
+          !template.resolution.hasOwnProperty('wh') ||
+          !checkWH(template.resolution.wh)) {
+        issues.push(`missing or invalid resolution, resolution=${JSON.stringify(template.resolution)}`);
+      }
+
+      if (!Type.is(template.viewport, Object) ||
+          !template.viewport.hasOwnProperty('wh') ||
+          !checkWH(template.viewport.wh)) {
+        issues.push(`missing or invalid viewport, viewport=${JSON.stringify(template.viewport)}`);
+      }
+
+      if (!Type.is(template.viewport, Object) ||
+          !template.viewport.hasOwnProperty('xy') ||
+          !checkXY(template.viewport.xy)) {
+        issues.push(`missing or invalid viewport, viewport=${JSON.stringify(template.viewport)}`);
+      }
+
+      if (raise && issues.length > 0) {
+        throw new common.PipelineError(issues.join('\n'));
+      }
+
+      return issues;
+    }
+  },
+
+  read: readPixels
+};
 
 module.exports.vtIsFunction = vtIsFunction;
 module.exports.vtHasFunctions = vtHasFunctions;
@@ -515,3 +637,5 @@ module.exports.NoSuchPathError = NoSuchPathError;
 module.exports.hasPath = hasPath;
 module.exports.getPath = getPath;
 module.exports.setPath = setPath;
+
+module.exports.texture = texture;

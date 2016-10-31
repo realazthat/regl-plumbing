@@ -193,7 +193,7 @@ class ExecutionContext {
 
     let context = this;
 
-    if (!context.available(inputSubcontext) && defaultValue !== util.NOVALUE) {
+    if (defaultValue !== util.NOVALUE && !context.available(inputSubcontext)) {
       if (context.dynamicallyAvailable(inputSubcontext)) {
         throw new pipeline.PipelineError('context.shallow(thing) but thing is not static');
       }
@@ -252,14 +252,14 @@ class ExecutionContext {
     return template;
   }
 
-  out ({inTex, outTex, clone = false}) {
+  out ({inTex, outTex, missing = common.texture.template.base, clone = false}) {
     assert(inTex instanceof execinput.ExecutionInputSubcontext);
     assert(outTex instanceof execinput.ExecutionInputSubcontext);
 
     let context = this;
     let {pipeline} = this;
 
-    inTex = context.shallow(inTex);
+    inTex = context.shallow(inTex, missing);
 
     let template = {
       type: inTex.type,
@@ -290,6 +290,8 @@ class ExecutionContext {
     for (let key of Object.keys(outTex)) {
       template[key] = outTex[key];
     }
+
+    assert(common.texture.template.invalid({template, raise: true}).length === 0);
 
     template.regl = {
       texture: pipeline.texture({template, node: context.node()})

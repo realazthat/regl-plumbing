@@ -2,7 +2,6 @@
 module.exports = {};
 
 const canonicalJSON = require('canonical-json');
-const _ = require('lodash');
 const assert = require('assert');
 const util = require('./regl-plumbing-util.js');
 const common = require('./regl-plumbing-common.js');
@@ -103,7 +102,6 @@ class SugarNode {
   constructor ({pipeline, component}) {
     this.pipeline = pipeline;
     this.component = component;
-    this.cached = {};
     this.compiling = false;
     this.executing = false;
     this.i = new Proxy(new nodeinput.NodeInputContext({pipeline, node: this.__box__()}), util.accessHandler);
@@ -155,7 +153,9 @@ class SugarNode {
   clearCompile () {
     let snode = this;
 
-    _.unset(snode.cached, 'out');
+    if (snode.context !== null) {
+      snode.component.destroy({context: snode.context});
+    }
 
     snode.compiling = false;
     snode.context = null;
@@ -230,18 +230,12 @@ class SugarNode {
     let i = snode.i.__unbox__();
     i.compute({runtime: 'static'});
 
-    if (snode.context !== null) {
-      snode.component.destroy({context});
-    }
-
     let context = new Proxy(new execution.ExecutionContext({pipeline, nodeInputContext: snode.i, runtime: 'static'}),
                                            util.accessHandler);
 
     snode.context = context;
 
     function finished (out) {
-      _.set(snode.cached, 'out', out);
-
       common.checkLeafs({
         value: out,
         allowedTypes: [execinput.ExecutionInputSubcontext],
@@ -303,21 +297,46 @@ class SugarNode {
     return snode.compiling === false && snode.context instanceof execution.ExecutionContext;
   }
 
-  execute ({recursive}) {
+  /**
+   * Execute this node. Note that the node must be properly compiled first.
+   *
+   * @param recursive  If true, execute this node and all dependent nodes in proper order.
+   *                   Note that all dependent nodes must have been properly compiled, or this
+   *                   will throw an error.
+   *                   If false, only execute this node.
+   * @param sync       If true, ensures that this execute() function returns only after
+   *                   execution is complete and will not return a Promise.
+   *                   If false, then `execute()` may return a Promise.
+   *
+   *
+   * @see SugarNode.compile()
+   */
+  execute ({recursive, sync = false}) {
     assert(recursive === true || recursive === false);
+    assert(sync === true || sync === false);
     let snode = this;
 
     if (recursive) {
+      // collect all the necessary (dependent) nodes
       let nodes = Array.from(ordering(snode));
 
       // nodes.forEach((node) => {node.clearExecute()});
+
+      // mark all relevant nodes as executing before we even begin
       nodes.forEach((node) => { node.executing = true; });
 
+      // put all the nodes into a job queue to be executed.
+      // this hairbrained convoluted thing is required just in case one of the `execute()`
+      // calls returns a Promise, and this is the only way to execute promises in order.
       let jobs = nodes.map(function (node) {
-        let job = () => node.execute({recursive: false});
+        let job = () => node.execute({recursive: false, sync});
         return job;
       });
+
+      // execute the list of jobs in order, whether they are sync or async.
       let result = util.allSync(jobs);
+
+      // return any resulting promise
       return result;
     }
 
@@ -325,13 +344,36 @@ class SugarNode {
       throw new common.PipelineError('You must compile this component first before executing it');
     }
 
+    // mark the node as executing, if it isn't already marked as such
+    snode.executing = true;
+
+    // put the execution context in dynamic mode
     snode.context.__unbox__().runtime('dynamic');
+
+    // make sure the dynamic inputs are available to the execution by (re)evaluating them
     snode.i.__unbox__().compute({runtime: 'dynamic'});
 
-    snode.component.execute({context: this.context});
+    let result = snode.component.execute({context: this.context});
 
-    snode.o.__unbox__().compute({runtime: 'dynamic'});
-    snode.executing = false;
+    if (sync && result instanceof Promise) {
+      throw new common.PipelineError(`Component ${snode.component.name()} is executing async, but this node was requested to run sync; you cannot run this node as sync`);
+    }
+
+    function complete () {
+      // after execution, (re)evaluate the dynamic outputs
+      snode.o.__unbox__().compute({runtime: 'dynamic'});
+
+      // make the node as execution complete
+      snode.executing = false;
+    }
+
+    if (result instanceof Promise) {
+      // `Component.execute()` doesn't return anything useful, but it might return a promise;
+      // if so we'll return that here so it can be chained properly.
+      return result.then(complete);
+    } else {
+      complete();
+    }
   }
 }
 
@@ -349,6 +391,8 @@ class TextureManager {
   }
 
   key ({template}) {
+    assert(common.texture.template.invalid({template, raise: true}).length === 0);
+
     // TODO: strip viewport
     return canonicalJSON(template);
   }

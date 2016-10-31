@@ -23,6 +23,10 @@ class Component {
   execute ({context}) {
 
   }
+
+  name () {
+    return this.constructor.name;
+  }
 }
 
 class Group extends Component {

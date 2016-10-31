@@ -38,8 +38,10 @@ class Shadertoy extends Component {
     let iResolution = [0, 0, PAR];
     let iViewport = [0, 0, 0, 0];
 
-
-    let out = context.shallow(context.i.out);
+    // if `context.i.out` is set, use that,
+    // otherwise, make an output texture by cloning the input texture
+    // while overriding any properties set in `context.i.out`.
+    let out = context.out({inTex: context.i.iChannel0, outTex: context.i.out});
 
     iResolution[0] = context.map(out.resolution.wh, (wh) => wh[0]);
     iResolution[1] = context.map(out.resolution.wh, (wh) => wh[1]);
@@ -80,8 +82,8 @@ class Shadertoy extends Component {
       let value = uniforms[key];
 
       if (common.vtHasFunctions({value, recursive: true})) {
-        uniforms[key] = function () {
-          return common.vtEvaluateFunctions({value});
+        uniforms[key] = function (...args) {
+          return common.vtEvaluateFunctions({value, args});
         };
       }
     }
@@ -147,7 +149,9 @@ class Shadertoy extends Component {
   }
 
   destroy ({context}) {
-    context.data.cmd.destroy();
+    if (context.data.cmd) {
+      context.data.cmd.destroy();
+    }
   }
 
   execute ({context}) {

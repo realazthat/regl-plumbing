@@ -179,6 +179,38 @@ class NodeInputContext extends Function {
       return value;
     }
 
+    function injectedStuffToStaticStuff ({value}) {
+      common.checkLeafs({
+        value,
+        allowedTypes: [dynamic.Dynamic, nodeoutput.NodeOutputContext],
+        allowedTests: [common.vtIsFunction, ({value}) => value === common.DISCONNECTED]
+      });
+
+      value = util.maptree({
+        value,
+        leafVisitor: evaloutputs
+      });
+
+      common.checkLeafs({
+        value,
+        allowedTypes: [dynamic.Dynamic],
+        allowedTests: [common.vtIsFunction, ({value}) => value === common.DISCONNECTED]
+      });
+
+      value = util.maptree({
+        value,
+        leafVisitor: wrapFuncs
+      });
+
+      common.checkLeafs({
+        value,
+        allowedTypes: [dynamic.Dynamic],
+        allowedTests: [({value}) => value === common.DISCONNECTED]
+      });
+
+      return value;
+    }
+
     let result;
 
     if (runtime === 'static') {
@@ -187,10 +219,15 @@ class NodeInputContext extends Function {
         return (lhs.length - rhs.length);
       });
 
-      if (this.rootNode()._injections.length === 0) {
+      let injections = this.rootNode()._injections.map(({path, value}) => {
+        value = injectedStuffToStaticStuff({value});
+        return {path, value};
+      });
+
+      if (injections.length === 0) {
         result = undefined;
-      } else if (this.rootNode()._injections.length === 1) {
-        let {path, value} = this.rootNode()._injections[0];
+      } else if (injections.length === 1) {
+        let {path, value} = injections[0];
         if (path.length === 0) {
           result = value;
         } else {
@@ -199,21 +236,10 @@ class NodeInputContext extends Function {
         }
       } else {
         result = {};
-        for (let {path, value} of this.rootNode()._injections) {
+        for (let {path, value} of injections) {
           _.set(result, path, value);
         }
       }
-
-      common.checkLeafs({
-        value: result,
-        allowedTypes: [dynamic.Dynamic, nodeoutput.NodeOutputContext],
-        allowedTests: [common.vtIsFunction]
-      });
-
-      result = util.maptree({
-        value: result,
-        leafVisitor: evaloutputs
-      });
 
       // remove all DISCONNECTED stuff from the tree
       result = common.collapseDisconnecteds({value: result});
@@ -221,23 +247,6 @@ class NodeInputContext extends Function {
       if (result === common.DISCONNECTED) {
         result = {};
       }
-
-      common.checkLeafs({
-        value: result,
-        allowedTypes: [dynamic.Dynamic],
-        allowedTests: [common.vtIsFunction]
-      });
-
-      result = util.maptree({
-        value: result,
-        leafVisitor: wrapFuncs
-      });
-
-      common.checkLeafs({
-        value: result,
-        allowedTypes: [dynamic.Dynamic],
-        allowedTests: []
-      });
     } else {
       // runtime is 'dynamic'
 
@@ -260,7 +269,7 @@ class NodeInputContext extends Function {
         allowedTests: []
       });
 
-      result = this.checkStaticResolvedValue(result);
+      result = this.checkDynamicResolvedValue(result);
     }
 
     if (runtime === 'static') {

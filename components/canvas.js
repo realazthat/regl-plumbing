@@ -1,5 +1,6 @@
 
 const {Component} = require('../regl-plumbing-component.js');
+const common = require('../regl-plumbing-common.js');
 const quad = require('glsl-quad');
 
 class Canvas extends Component {
@@ -32,21 +33,24 @@ class Canvas extends Component {
     let frag = `
     precision highp float;
     
-    vec2 lerp(vec2 a, vec2 b, vec2 t) {
-      return a + (b-a)*t;
-    }
 
     uniform sampler2D iChannel0;
-    uniform vec4 iChannelViewport[4];
-    uniform vec3 iChannelResolution[4];
+    uniform vec4 iViewport;
+    uniform vec3 iResolution;
+    uniform vec4 iChannelViewport[1];
+    uniform vec3 iChannelResolution[1];
 
     void mainImage (out vec4 fragColor, in vec2 fragCoord) {
 
-      vec2 dst_uv = fragCoord.xy;
+
+      vec2 dst_vxy = iViewport.xy;
+      vec2 dst_vwh = iViewport.zw;
+      vec2 dst_xy = fragCoord.xy;
+      vec2 dst_uv = (dst_xy - dst_vxy)/dst_vwh;
 
       vec2 vxy = iChannelViewport[0].xy;
       vec2 vwh = iChannelViewport[0].zw;
-      vec2 src_xy = lerp(vxy, vxy+vwh, dst_uv);
+      vec2 src_xy = mix(vxy, vxy+vwh, dst_uv);
       vec2 src_uv = src_xy / iChannelResolution[0].xy;
 
       fragColor = texture2D(iChannel0, src_uv);
@@ -55,7 +59,7 @@ class Canvas extends Component {
     varying vec2 v_uv;
 
     void main() {
-      mainImage(gl_FragColor, v_uv);
+      mainImage(gl_FragColor, v_uv*iResolution.xy);
     }
     `;
 
@@ -74,6 +78,10 @@ class Canvas extends Component {
 
     let uniforms = {
       iChannel0: context.map(context.i.in.regl.texture),
+      'iResolution': function (context) { return [context.drawingBufferWidth, context.drawingBufferHeight, PAR]; },
+      'iViewport': function (context) { return [0, 0, context.drawingBufferWidth, context.drawingBufferHeight]; },
+      'iChannelViewport[0]': iChannelViewport0,
+      'iChannelResolution[0]': iChannelResolution0,
       u_clip_y: +1
     };
 
@@ -85,6 +93,17 @@ class Canvas extends Component {
     uniforms['iChannelViewport[0]'] = iChannelViewport0;
     uniforms['iChannelResolution[0]'] = iChannelResolution0;
 
+    // if any uniform values have anything dynamic in them, make the entire uniform value dynamic
+    for (let key of Object.keys(uniforms)) {
+      let value = uniforms[key];
+
+      if (common.vtHasFunctions({value, recursive: true})) {
+        uniforms[key] = function (...args) {
+          return common.vtEvaluateFunctions({value, args});
+        };
+      }
+    }
+
     let cmd = context.pipeline.regl({
       frag,
       vert,
@@ -93,12 +112,6 @@ class Canvas extends Component {
       },
       elements: quad.indices,
       uniforms
-      // viewport: {
-      //   x: iViewport[0],
-      //   y: iViewport[1],
-      //   width: iViewport[2],
-      //   height: iViewport[3]
-      // }
     });
 
     context.data.cmd = cmd;
