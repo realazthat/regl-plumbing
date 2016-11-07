@@ -118,7 +118,8 @@ class Shadertoy extends Component {
     varying vec2 v_uv;
 
     void main(){
-      vec2 fragCoord = v_uv*iResolution.xy;
+      vec2 fragCoord = gl_FragCoord.xy;
+      //vec2 fragCoord = v_uv*iResolution.xy;
 
       mainImage(gl_FragColor, fragCoord);
     }
