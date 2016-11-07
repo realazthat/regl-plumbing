@@ -103,7 +103,7 @@ class ExecutionContext {
     // now run the transform function on the result
     if (common.vtIsDynamic({value, recursive: true})) {
       return function () {
-        value = util.maptree({
+        let result = util.maptree({
           value,
           leafVisitor: function ({value}) {
             if (value instanceof dynamic.Dynamic) {
@@ -119,12 +119,13 @@ class ExecutionContext {
         });
 
         common.checkLeafs({
-          value,
+          value: result,
           allowedTypes: [],
           allowedTests: []
         });
 
-        return func(value);
+        result = func(result);
+        return result;
       };
     } else {
       value = func(value);

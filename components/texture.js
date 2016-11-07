@@ -13,19 +13,28 @@ class Texture extends Component {
   compile ({context}) {
     // resolve the inputs statically
     let inputs = context.resolve(context.i);
-    let {resolution, format = 'rgba', type = 'uint8', min = 'nearest', mag = 'nearest', mipmap = false} = inputs;
+    let {resolution, format = 'rgba', type = 'uint8', min = 'nearest', mag = 'nearest', wrapT = 'clamp', wrapS = 'clamp',
+                     mipmap = false, data = null} = inputs;
 
     let viewport = {wh: resolution.wh, xy: [0, 0]};
 
-    let texture = this.pipeline.regl.texture({
+    let params = {
       width: resolution.wh[0],
       height: resolution.wh[0],
       format,
       type,
       min,
       mag,
+      wrapS,
+      wrapT,
       mipmap
-    });
+    };
+
+    if (data !== null) {
+      params.data = data;
+    }
+
+    let texture = this.pipeline.regl.texture(params);
 
     return {
       regl: {
@@ -33,10 +42,12 @@ class Texture extends Component {
       },
       resolution,
       viewport,
-      format: format,
-      type: type,
-      min: min,
-      mag: mag,
+      format,
+      type,
+      min,
+      mag,
+      wrapS,
+      wrapT,
       mipmap: mipmap !== false
     };
   }

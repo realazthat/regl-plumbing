@@ -21,6 +21,7 @@ const dynamic = require('./regl-plumbing-dynamic.js');
  */
 class NodeInputContext extends Function {
   constructor ({pipeline, node, rootNode = null, path = []}) {
+    assert(pipeline !== undefined);
     assert(node instanceof main.private.SugarNode);
     assert(rootNode === null || (rootNode instanceof NodeInputContext));
 

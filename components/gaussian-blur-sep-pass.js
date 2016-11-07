@@ -27,43 +27,74 @@ const template = `
     vec2 dst_pos = vec2(fragCoord);
     vec2 src_pos0 = dst2src(dst_pos);
 
+    vec2 src_uv0 = src_pos0/iChannelResolution[0].xy;
+    vec4 src_color0 = texture2D(iChannel0, src_uv0);
 
-
-    // vec4 t[{{samples}}];
-    float wsum = 0.0;
-    float w[{{samples}}];
-    for (int i = -{{radius}}; i < {{radius}}; ++i) {
-      vec2 src_pos = src_pos0 + vec2(i)*direction;
-
-      if (!pos_inbounds(src_pos, iChannelViewport[0])) {
-        w[{{radius}} + i] = 0.0;
-        continue;
-      }
-
-      float wi = (1.0/(sqrt(2.0*PI)*sigma)) * exp(-float(i*i)/(2.0*sigma*sigma));
-      w[{{radius}} + i] = wi;
-      wsum += wi;
+    highp float _2PIsqrt = sqrt(2.0*PI);
+    highp float sigma_squared = sigma*sigma;
+    highp float w[{{radius}} + 1];
+    for (int i = 0; i <= {{radius}}; ++i) {
+      highp float wi = exp(-float(i*i)/(2.0*sigma_squared)) / (_2PIsqrt*sigma);
+      w[i] = wi;
     }
+
 
     vec4 result = vec4(0);
+    float wsum = 0.0;
 
-    for (int i = -{{radius}}; i < {{radius}}; ++i) {
-      vec2 src_pos = src_pos0 + vec2(i)*direction;
-
-      vec2 src_uv = src_pos / iChannelResolution[0].xy;
-
-      vec4 src_color = texture2D(iChannel0, src_uv);
-
-      float wi = w[{{radius}} + i];
-      result += (src_color*wi)/wsum;
+    // get the center pixel
+    {
+      float w0 = w[0];
+      result += (src_color0 * w0);
+      wsum += w0;
     }
 
-    fragColor = result;
+    int count = 1;
+    for (int i = 1; i <= {{radius}}; ++i) {
+      float wi = w[i];
+
+      for (int sign = -1; sign <= +1; sign += 2) {
+        vec2 src_pos = src_pos0 + vec2(i*sign)*direction;
+
+
+        if (!pos_inbounds(src_pos, iChannelViewport[0])) {
+          // TODO: allow for different wrap behaviors here
+          // * clamp
+          // * repeat
+          // * border color
+          continue;
+        }
+        wsum += wi;
+
+        count += 1;
+
+        vec2 src_uv = src_pos / iChannelResolution[0].xy;
+
+        vec4 src_color = texture2D(iChannel0, src_uv);
+
+        result += (src_color*wi);
+      }
+
+    }
+
+    fragColor = vec4(1);
+
+    // fragColor = src_color0;
+    fragColor.{{components}} = (result/wsum).{{components}};
+    // fragColor = vec4(w[1]/wsum,1,1,1);
+    // fragColor = result;
+    // fragColor = vec4(float(count)/255.0,1,1,1);
+
+    // fragColor = vec4(1,1,1,1);
+
+    // if (!pos_inbounds(src_pos0, iChannelViewport[0])) {
+    //   fragColor = vec4(0,0,0,1);
+    // }
 
   }
 `;
 
-class GaussianBlurSep extends Group {
+class GaussianBlurSepPass extends Group {
   constructor ({pipeline}) {
     super({
       pipeline
@@ -97,12 +128,14 @@ class GaussianBlurSep extends Group {
     compiler.i.sigma = entry.o.sigma;
     compiler.i.direction = entry.o.direction;
     compiler.i.out = entry.o.out;
+    compiler.i.components = entry.o.components;
 
     compiler.i.compile = pipeline.func(function ({context}) {
       let out = context.out({inTex: context.i.in, outTex: context.i.out});
       let direction = context.resolve(context.i.direction);
       let radius = context.resolve(context.i.radius);
       let sigma = context.map(context.i.sigma);
+      let components = context.shallow(context.i.components, 'rgb');
 
       if (direction === 'horizontal') {
         direction = [1, 0];
@@ -112,9 +145,12 @@ class GaussianBlurSep extends Group {
         throw new pipeline.PipelineError(`gaussian.direction must be one of vertical or horizontal, "${direction}" is an invalid choice`);
       }
 
-      let code = nunjucks.renderString(template, {radius: radius, samples: radius * 2 + 1});
+      let code = nunjucks.renderString(template, {radius: radius, components});
 
       return {code, out, sigma, direction};
+    });
+    compiler.i.execute = pipeline.func(function ({context}) {
+
     });
 
     shadertoy.i.iChannel0 = entry.o.in;
@@ -127,4 +163,4 @@ class GaussianBlurSep extends Group {
   }
 }
 
-module.exports = GaussianBlurSep;
+module.exports = GaussianBlurSepPass;

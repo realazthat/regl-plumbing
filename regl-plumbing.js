@@ -204,8 +204,9 @@ class SugarNode {
    * If an argument is not available at compile time,
    * and the component resolves it at compile time, then it will throw an error.
    */
-  compile ({recursive}) {
+  compile ({recursive, sync = false}) {
     assert(recursive === true || recursive === false);
+    assert(sync === true || sync === false);
     let snode = this;
     let {pipeline} = snode;
 
@@ -216,7 +217,7 @@ class SugarNode {
       nodes.forEach((node) => { node.compiling = true; });
 
       let jobs = nodes.map(function (node) {
-        let job = () => node.compile({recursive: false});
+        let job = () => node.compile({recursive: false, sync});
         return job;
       });
       return util.allSync(jobs);
@@ -284,6 +285,11 @@ class SugarNode {
     }
 
     let result = snode.component.compile({context});
+
+    if (sync && result instanceof Promise) {
+      throw new common.PipelineError(`Component ${snode.component.name()} is compile async, but this node was requested to compile sync; you cannot compile this node as sync`);
+    }
+
     if (result instanceof Promise) {
       return result.then(function (out) {
         return finished(out);
@@ -340,6 +346,8 @@ class SugarNode {
       return result;
     }
 
+    // console.log(`executing ${snode.component.name()}`);
+
     if (!(snode.isCompiled())) {
       throw new common.PipelineError('You must compile this component first before executing it');
     }
@@ -353,6 +361,8 @@ class SugarNode {
     // make sure the dynamic inputs are available to the execution by (re)evaluating them
     snode.i.__unbox__().compute({runtime: 'dynamic'});
 
+    // console.log('dynamic value:', snode.i.__unbox__().getValue({runtime: 'dynamic'}));
+
     let result = snode.component.execute({context: this.context});
 
     if (sync && result instanceof Promise) {
@@ -362,6 +372,8 @@ class SugarNode {
     function complete () {
       // after execution, (re)evaluate the dynamic outputs
       snode.o.__unbox__().compute({runtime: 'dynamic'});
+
+      // console.log('dynamic out value:', snode.o.__unbox__().getValue({runtime: 'dynamic'}));
 
       // make the node as execution complete
       snode.executing = false;
@@ -549,6 +561,7 @@ class Pipeline extends EventEmitter {
     this.addComponent('numerify', require('./components/numerify.js'));
     this.addComponent('delta', require('./components/delta.js'));
     this.addComponent('normalize', require('./components/normalize.js'));
+    this.addComponent('constant', require('./components/constant.js'));
 
     this._textureMgr = new TextureManager({pipeline: this});
     this._fboMgr = new FBOManager({pipeline: this});

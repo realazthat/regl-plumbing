@@ -22,7 +22,7 @@ const ExtendableError = require('es6-error');
 
 // const common = module.exports;
 
-window.__time = 0;
+global.__time = 0;
 
 function getPath (value, path, def) {
   if (path.length === 0) {
@@ -50,8 +50,8 @@ function setPath (obj, path, value) {
 }
 
 function time () {
-  window.__time += 1;
-  return window.__time;
+  global.__time += 1;
+  return global.__time;
 }
 
 class PipelineError extends ExtendableError {

@@ -47,10 +47,6 @@ class Group extends Component {
     if (context.data.chainArgs) {
       util.clear(context.data.chainArgs);
     }
-
-    if (context.data.group) {
-      util.clear(context.data.group);
-    }
   }
 
   compile ({context}) {
