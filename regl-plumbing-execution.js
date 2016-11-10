@@ -288,9 +288,11 @@ class ExecutionContext {
 
     outTex = context.shallow(outTex);
 
-    for (let key of Object.keys(outTex)) {
-      template[key] = outTex[key];
-    }
+    template = _.merge(template, outTex);
+
+    // for (let key of Object.keys(outTex)) {
+    //   template[key] = _.merge(template[key], outTex[key]);
+    // }
 
     assert(common.texture.template.invalid({template, raise: true}).length === 0);
 

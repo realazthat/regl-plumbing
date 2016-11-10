@@ -16,7 +16,15 @@ class Texture extends Component {
     let {resolution, format = 'rgba', type = 'uint8', min = 'nearest', mag = 'nearest', wrapT = 'clamp', wrapS = 'clamp',
                      mipmap = false, data = null} = inputs;
 
-    let viewport = {wh: resolution.wh, xy: [0, 0]};
+    let viewport = context.shallow(context.i.viewport, {});
+
+    viewport = {
+      xy: viewport.hasOwnProperty('xy') ? viewport.xy : [0, 0],
+      wh: viewport.hasOwnProperty('wh') ? viewport.wh : resolution.wh,
+      wrapS: viewport.hasOwnProperty('wrapS') ? viewport.wrapS : 'none',
+      wrapT: viewport.hasOwnProperty('wrapT') ? viewport.wrapT : 'none',
+      border: viewport.hasOwnProperty('border') ? viewport.border : [0, 0, 0, 1]
+    };
 
     let params = {
       width: resolution.wh[0],

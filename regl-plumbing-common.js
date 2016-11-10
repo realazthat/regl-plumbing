@@ -515,7 +515,7 @@ function func (f) {
 }
 
 // a submodule for texture-related stuff
-let texture = {
+const texture = {
 
   template: {
     // base template (default) texture
@@ -528,7 +528,13 @@ let texture = {
       wrapS: 'clamp',
       mipmap: false,
       resolution: {wh: [1, 1]},
-      viewport: {xy: [0, 0], wh: [1, 1]}
+      viewport: {
+        xy: [0, 0],
+        wh: [1, 1],
+        wrapS: 'none',
+        wrapT: 'none',
+        border: [0, 0, 0, 1]
+      }
     },
 
     invalid: function ({template, raise = false}) {
@@ -546,7 +552,7 @@ let texture = {
                                'rgba s3tc dxt3', 'rgba s3tc dxt5', 'rgb atc', 'rgba atc explicit alpha',
                                'rgba atc interpolated alpha', 'rgb pvrtc 4bppv1', 'rgb pvrtc 2bppv1',
                                'rgba pvrtc 4bppv1', 'rgba pvrtc 2bppv1', 'rgb etc1']);
-
+      const vpwraps = new Set(['none', 'repeat', 'clamp', 'mirror', 'border']);
       let issues = [];
 
       if (!types.has(template.type)) {
@@ -591,14 +597,24 @@ let texture = {
 
       if (!Type.is(template.viewport, Object) ||
           !template.viewport.hasOwnProperty('wh') ||
-          !checkWH(template.viewport.wh)) {
+          !template.viewport.hasOwnProperty('xy') ||
+          !checkWH(template.viewport.wh) ||
+          !checkXY(template.viewport.xy)) {
         issues.push(`missing or invalid viewport, viewport=${JSON.stringify(template.viewport)}`);
       }
 
-      if (!Type.is(template.viewport, Object) ||
-          !template.viewport.hasOwnProperty('xy') ||
-          !checkXY(template.viewport.xy)) {
-        issues.push(`missing or invalid viewport, viewport=${JSON.stringify(template.viewport)}`);
+      if (!vpwraps.has(template.viewport.wrapS)) {
+        issues.push(`missing or invalid viewport.wrapS, wrapS=${JSON.stringify(template.viewport.wrapS)}` +
+                    `, valid wraps=${Array.from(vpwraps).join(',')}`);
+      }
+
+      if (!vpwraps.has(template.viewport.wrapT)) {
+        issues.push(`missing or invalid viewport.wrapT, wrapT=${JSON.stringify(template.viewport.wrapT)}` +
+                    `, valid wraps=${Array.from(vpwraps).join(',')}`);
+      }
+
+      if (!Type.instance(template.viewport.border, Array) || template.viewport.border.length !== 4) {
+        issues.push(`missing or invalid border, border=${JSON.stringify(template.viewport.border)}`);
       }
 
       if (raise && issues.length > 0) {

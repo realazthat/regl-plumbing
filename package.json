@@ -68,10 +68,11 @@
     "image processing",
     "gpgpu",
     "gpu",
-    "dsp"
+    "dsp",
+    "multipass"
   ],
   "scripts": {
-    "mytest": "semistandard | snazzy",
+    "test": "semistandard | snazzy && tape test/util/index.js | faucet",
     "build": "npm run build-script && npm run build-examples",
     "build-size": "mkdir -p ./www && browserify --full-paths regl-plumbing.js | discify > www/size.html",
     "build-script": "mkdir -p ./dist && browserify regl-plumbing.js --standalone regl-plumbing > ./dist/regl-plumbing.js",

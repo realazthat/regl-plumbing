@@ -11,17 +11,18 @@ class ReslTexture extends Component {
   }
 
   compile ({context}) {
+    let {pipeline} = this;
     let input = context.resolve(context.i);
 
     let {src, flipY = true, format = 'rgba', type = 'uint8', min = 'nearest', mag = 'nearest', mipmap = false,
          wrapS = 'clamp', wrapT = 'clamp'} = input;
 
-    let component = this;
+    let viewport = context.shallow(context.i.viewport, {});
 
     return new Promise(function (resolve, reject) {
       let params = {src};
 
-      component.pipeline.resl({
+      pipeline.resl({
         manifest: {
           texture: {
             src: src,
@@ -39,14 +40,17 @@ class ReslTexture extends Component {
               params.wrapS = wrapS;
               params.wrapT = wrapT;
 
-              return component.pipeline.regl.texture(params);
+              return pipeline.regl.texture(params);
             }
           }
         },
         onDone: ({texture}) => {
-          let viewport = {
-            xy: [0, 0],
-            wh: [texture.width, texture.height]
+          viewport = {
+            xy: viewport.hasOwnProperty('xy') ? viewport.xy : [0, 0],
+            wh: viewport.hasOwnProperty('wh') ? viewport.wh : [texture.width, texture.height],
+            wrapS: viewport.hasOwnProperty('wrapS') ? viewport.wrapS : 'none',
+            wrapT: viewport.hasOwnProperty('wrapT') ? viewport.wrapT : 'none',
+            border: viewport.hasOwnProperty('border') ? viewport.border : [0, 0, 0, 1]
           };
 
           let resolution = {wh: [texture.width, texture.height]};

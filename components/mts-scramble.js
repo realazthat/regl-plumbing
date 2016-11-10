@@ -54,13 +54,7 @@ const code = `
 class Scramble extends Group {
   constructor ({pipeline}) {
     super({
-      pipeline,
-      group: [
-        {
-          name: 'shadertoy',
-          component: 'shadertoy'
-        }
-      ]
+      pipeline
     });
 
     this.compileSync = true;
@@ -70,13 +64,21 @@ class Scramble extends Group {
     Object.freeze(this);
   }
 
+  elements () {
+    return [
+      {
+        name: 'shadertoy',
+        component: 'shadertoy'
+      }
+    ];
+  }
   chain ({entry, shadertoy, exit}) {
-    shadertoy.i.iChannel0 = entry.o.texture;
-    shadertoy.i.framebuffer = entry.o.framebuffer;
+    shadertoy.i.iChannel0 = entry.o.in;
+    shadertoy.i.out = entry.o.out;
     shadertoy.i.uniforms = {iSubpassShape: entry.o.iSubpassShape};
     shadertoy.i.code = code;
 
-    exit.i.framebuffer = shadertoy.o.framebuffer;
+    exit.i.out = shadertoy.o.out;
   }
 }
 
