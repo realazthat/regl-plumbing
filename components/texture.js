@@ -11,10 +11,17 @@ class Texture extends Component {
   }
 
   compile ({context}) {
-    // resolve the inputs statically
-    let inputs = context.resolve(context.i);
-    let {resolution, format = 'rgba', type = 'uint8', min = 'nearest', mag = 'nearest', wrapT = 'clamp', wrapS = 'clamp',
-                     mipmap = false, data = null} = inputs;
+    let {pipeline} = this;
+
+    let resolution = context.resolve(context.i.resolution);
+    let format = context.resolve(context.i.format, 'rgba');
+    let type = context.resolve(context.i.type, 'uint8');
+    let min = context.resolve(context.i.min, 'nearest');
+    let mag = context.resolve(context.i.mag, 'nearest');
+    let wrapS = context.resolve(context.i.wrapS, 'clamp');
+    let wrapT = context.resolve(context.i.wrapT, 'clamp');
+    let mipmap = context.resolve(context.i.mipmap, false);
+    let data = context.resolve(context.i.data, null);
 
     let viewport = context.shallow(context.i.viewport, {});
 
@@ -42,7 +49,7 @@ class Texture extends Component {
       params.data = data;
     }
 
-    let texture = this.pipeline.regl.texture(params);
+    let texture = pipeline.regl.texture(params);
 
     return {
       regl: {
@@ -59,6 +66,7 @@ class Texture extends Component {
       mipmap: mipmap !== false
     };
   }
+
 }
 
 module.exports = Texture;
