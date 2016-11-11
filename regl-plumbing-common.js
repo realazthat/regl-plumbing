@@ -516,7 +516,50 @@ function func (f) {
 
 // a submodule for texture-related stuff
 const texture = {
+  // color components
+  components: {
+    invalid: function invalid ({components, lvalue = true, raise = false}) {
+      let colors = new Set(['r', 'g', 'b', 'a']);
 
+      let issues = [];
+      // if "broken" is set to true, then an error occured that was so bad, no more checking should be done.
+      let broken = false;
+
+      if (!broken && !Type.is(components, String)) {
+        issues.push(`Color components is of wrong type, type="${Type.string(components)}, should be String"`);
+        broken = true;
+      }
+
+      if (!broken && components.length === 0) {
+        issues.push('Color components cannot be empty');
+      }
+
+      let characters = Array.from(components);
+
+      for (let char of characters) {
+        if (!broken && !colors.has(char)) {
+          issues.push(`Invalid color components, components="${components}", only r,g,b,a are valid colors`);
+        }
+      }
+
+      if (!broken && lvalue) {
+        let seen = new Set([]);
+        for (let char of characters) {
+          if (seen.has(char)) {
+            issues.push(`Invalid color components, components="${components}", l-value of swizzle cannot have duplicate components`);
+          }
+
+          seen.add(char);
+        }
+      }
+
+      if (raise && issues.length > 0) {
+        throw new common.PipelineError(issues.join('\n'));
+      }
+
+      return issues;
+    }
+  },
   template: {
     // base template (default) texture
     base: {
