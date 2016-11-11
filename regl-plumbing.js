@@ -563,6 +563,7 @@ class Pipeline extends EventEmitter {
     this.addComponent('normalize', require('./components/normalize.js'));
     this.addComponent('constant', require('./components/constant.js'));
     this.addComponent('subsample', require('./components/subsample.js'));
+    this.addComponent('resample', require('./components/resample.js'));
 
     this._textureMgr = new TextureManager({pipeline: this});
     this._fboMgr = new FBOManager({pipeline: this});
