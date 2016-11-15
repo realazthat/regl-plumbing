@@ -54,7 +54,8 @@ class GaussianBlurSep extends Group {
         viewport: {
           xy: [0, 0],
           wh: context.resolve(inTex.viewport.wh)
-        }
+        },
+        regl: {texture: null}
       };
 
       let tmp = context.texture({cascade: [inTex, tmpTex]});

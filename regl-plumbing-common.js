@@ -483,7 +483,7 @@ function readPixels ({regl, texture, viewport = null}) {
 
   let result = {};
 
-  if (!viewport) {
+  if (viewport === null) {
     result.buffer = regl.read({framebuffer});
   } else {
     result.buffer = regl.read({x: viewport.xy[0], y: viewport.xy[1], width: viewport.wh[0], height: viewport.wh[1], framebuffer});
@@ -666,6 +666,16 @@ const texture = {
 
       return issues;
     }
+  },
+
+  // returns true if a texture's viewport covers the entire image exactly
+  fitted: function fitted ({texture}) {
+    assert(common.texture.template.invalid({template: texture, raise: true}).length === 0);
+
+    return (texture.viewport.xy[0] === 0 &&
+            texture.viewport.xy[1] === 0 &&
+            texture.viewport.wh[0] === texture.resolution.wh[0] &&
+            texture.viewport.wh[1] === texture.resolution.wh[1]);
   },
 
   read: readPixels

@@ -96,7 +96,7 @@ class ExecutionContext {
 
     common.checkLeafs({
       value,
-      allowedTypes: [],
+      allowedTypes: [dynamic.Dynamic],
       allowedTests: [common.vtIsFunction]
     });
 
@@ -244,11 +244,18 @@ class ExecutionContext {
       template = _.merge(template, sheet);
     }
 
-    if ('regl' in template) {
-      delete template.regl;
+    // if ('regl' in template) {
+    //   delete template.regl;
+    // }
+
+    if (template.regl === undefined ||
+        !common.vtIsReglValue({value: template.regl.texture})) {
+      template.regl = {
+        texture: pipeline.texture({template, node: context.node()})
+      };
     }
 
-    template.regl = {texture: pipeline.texture({template, node: context.node()})};
+    assert(common.texture.template.invalid({template, raise: true}).length === 0);
 
     return template;
   }

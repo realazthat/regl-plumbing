@@ -32,6 +32,7 @@
     "jquery": "^3.1.0",
     "lodash": "^4.15.0",
     "nunjucks": "^2.5.0",
+    "range": "^0.0.3",
     "regl": "git+https://github.com/regl-project/regl.git#gh-pages",
     "resl": "^1.0.1",
     "type-of-is": "^3.4.0"
@@ -45,7 +46,6 @@
     "microseconds": "^0.1.0",
     "mkdirp": "^0.5.1",
     "ncp": "^2.0.0",
-    "range": "^0.0.3",
     "semistandard": "~8.0.0",
     "snazzy": "^4.0.0",
     "tape": "^4.6.2",
