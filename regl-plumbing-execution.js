@@ -212,7 +212,7 @@ class ExecutionContext {
         return value;
       }
     });
-    
+
     common.checkLeafs({value, allowedTypes: []});
 
     return value;
