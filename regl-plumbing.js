@@ -160,6 +160,13 @@ class SugarNode {
     snode.compiling = false;
     snode.context = null;
     snode._dirty = true;
+
+    // TODO: spread the dirty to all children
+  }
+
+  destroy () {
+    this.clearCompile();
+    // TODO: remove all references by all children.
   }
 
   /**
@@ -237,6 +244,10 @@ class SugarNode {
     snode.context = context;
 
     function finished (out) {
+      if (out === undefined) {
+        throw new common.PipelineError(`Component ${snode.component.name()} compile() returns nothing, it should always return something, like a {}`);
+      }
+
       common.checkLeafs({
         value: out,
         allowedTypes: [execinput.ExecutionInputSubcontext],
@@ -387,6 +398,54 @@ class SugarNode {
       complete();
     }
   }
+
+  saveState () {
+    let {pipeline} = this;
+    let {msgpack} = pipeline;
+
+    // TODO: turn this into an exception
+    assert(!this.compiling);
+    // TODO: turn this into an exception
+    assert(!this.executing);
+    // TODO: turn this into an exception
+    assert(!this._dirty);
+
+    let state = {};
+
+    state.context = {};
+
+    state.context = this.context === null ? null : this.context.saveState();
+
+    state.i = this.i.__unbox__().saveState();
+    state.o = this.o.__unbox__().saveState();
+
+    state._dirty = this._dirty;
+
+    return msgpack.encode(state);
+  }
+
+  loadState ({buffer}) {
+    let {pipeline} = this;
+    let {msgpack} = pipeline;
+
+    // TODO: turn this into an exception
+    assert(!this.compiling);
+    // TODO: turn this into an exception
+    assert(!this.executing);
+
+    let state = msgpack.decode(buffer);
+
+    if (state.context === null) {
+      this.context = null;
+    } else {
+      this.context.loadState({buffer: state.context});
+    }
+
+    this.i.__unbox__().loadState({buffer: state.i});
+    this.o.__unbox__().loadState({buffer: state.o});
+
+    this._dirty = state._dirty;
+  }
 }
 
 class TextureManager {
@@ -450,12 +509,13 @@ class TextureManager {
       return;
     }
 
-    for (let reglTexture of this.owned.get(node)) {
+    for (let reglTexture of this.owned.get(node).keys()) {
       this.release({node, reglTexture});
     }
   }
 
   release ({node, reglTexture = null}) {
+    assert(common.vtIsReglValue({value: reglTexture}));
     assert(this.owned.has(node));
     assert(this.owned.get(node).has(reglTexture));
 
@@ -565,9 +625,14 @@ class Pipeline extends EventEmitter {
     this.addComponent('subsample', require('./components/subsample.js'));
     this.addComponent('resample', require('./components/resample.js'));
     this.addComponent('copy', require('./components/copy.js'));
+    this.addComponent('swizzle', require('./components/swizzle.js'));
+    this.addComponent('div', require('./components/div.js'));
 
     this._textureMgr = new TextureManager({pipeline: this});
     this._fboMgr = new FBOManager({pipeline: this});
+
+    this.msgpack = require('./regl-plumbing-serialize.js')({regl});
+
     Object.freeze(this);
   }
 

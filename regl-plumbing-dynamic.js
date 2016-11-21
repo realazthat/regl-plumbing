@@ -4,10 +4,10 @@ module.exports = {};
 const common = require('./regl-plumbing-common.js');
 
 class Dynamic {
-  constructor ({value = null, func = null} = {}) {
+  constructor ({value = null, func = null, changed = null} = {}) {
     this.value = value;
     this.func = func;
-    this.changed = common.time();
+    this.changed = changed !== null ? changed : common.time();
   }
 
   evaluate () {

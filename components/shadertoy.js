@@ -57,6 +57,7 @@ class Shadertoy extends Component {
 
     for (let channel of [0, 1, 2, 3]) {
       uniforms[`iChannelViewport[${channel}]`] = [0, 0, 0, 0];
+      uniforms[`iChannelBorder[${channel}]`] = [0, 0, 0, 1];
       uniforms[`iChannelResolution[${channel}]`] = [0, 0, 0];
     }
 
@@ -67,6 +68,7 @@ class Shadertoy extends Component {
 
       uniforms[`iChannel${channel}`] = context.map(context.i[`iChannel${channel}`].regl.texture);
       uniforms[`iChannelResolution[${channel}]`] = context.map(context.i[`iChannel${channel}`].resolution.wh, (wh) => Array.from(wh).concat([PAR]));
+      uniforms[`iChannelBorder[${channel}]`] = context.shallow(context.i[`iChannel${channel}`].viewport.border);
 
       let iChannelViewportI = [0, 0, 0, 0];
       iChannelViewportI[0] = context.map(context.i[`iChannel${channel}`].viewport.xy[0]);
@@ -112,6 +114,7 @@ class Shadertoy extends Component {
     uniform sampler2D iChannel3;
     uniform vec3 iChannelResolution[4];
     uniform vec4 iChannelViewport[4];
+    uniform vec4 iChannelBorder[4];
 
     ${code}
 
@@ -151,7 +154,8 @@ class Shadertoy extends Component {
 
   destroy ({context}) {
     if (context.data.cmd) {
-      context.data.cmd.destroy();
+      // TODO: how to destroy regl command?
+      // context.data.cmd.destroy();
     }
   }
 

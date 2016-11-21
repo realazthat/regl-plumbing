@@ -59,7 +59,8 @@ class Canvas extends Component {
     varying vec2 v_uv;
 
     void main() {
-      mainImage(gl_FragColor, v_uv*iResolution.xy);
+      vec2 fragCoord = gl_FragCoord.xy;
+      mainImage(gl_FragColor, fragCoord);
     }
     `;
 

@@ -28,6 +28,33 @@ class ExecutionContext {
     Object.seal(this);
   }
 
+  saveState () {
+    let {pipeline} = this;
+    let {msgpack} = pipeline;
+
+    let state = {};
+
+    state._runtime = this._runtime;
+    state.data = this.data;
+
+    ({value: state} = msgpack.wrap({value: state, raise: true}));
+
+    return msgpack.encode(state);
+  }
+
+  loadState ({buffer}) {
+    let {pipeline} = this;
+    let {msgpack} = pipeline;
+
+    let state = msgpack.decode(buffer);
+
+    // TODO: turn this into an exception
+    assert(state._runtime === 'static' || state._runtime === 'dynamic');
+
+    this._runtime = state._runtime;
+    this.data = state.data;
+  }
+
   runtime (runtime = util.NOVALUE) {
     if (runtime !== util.NOVALUE) {
       assert(runtime === 'static' || runtime === 'dynamic');
@@ -136,6 +163,10 @@ class ExecutionContext {
   resolve (value, missing = util.NOVALUE) {
     let context = this;
 
+    common.checkLeafs({value,
+      allowedTypes: [execinput.ExecutionInputSubcontext, dynamic.Dynamic],
+      allowedTests: [common.vtIsFunction]});
+
     class THISNOVALUET {
 
     }
@@ -144,15 +175,11 @@ class ExecutionContext {
     value = util.maptree({
       value,
       leafVisitor: function ({value}) {
-        // if (common.vtIsFunction({value})) {
-        //   return value();
-        // }
-
-        // if (value instanceof dynamic.Dynamic) {
-        //   return value.evaluate();
-        // }
-
         if (value instanceof execinput.ExecutionInputSubcontext) {
+          // TODO: turn this into an exception
+          // english: you can only "resolve" things with this context that belong to this context.
+          assert(value.executionContext === context.__unbox__());
+
           return context.resolveSubcontext(value, THISNOVALUE);
         }
 
@@ -167,6 +194,26 @@ class ExecutionContext {
 
       throw new common.PipelineError('Cannot resolve value, it doesn\'t exist or has something dynamic');
     }
+
+    common.checkLeafs({value,
+      allowedTypes: [dynamic.Dynamic],
+      allowedTests: [common.vtIsFunction]});
+
+    value = util.maptree({
+      value,
+      leafVisitor: function ({value}) {
+        if (common.vtIsFunction({value})) {
+          return value();
+        }
+
+        if (value instanceof dynamic.Dynamic) {
+          return value.evaluate();
+        }
+        return value;
+      }
+    });
+    
+    common.checkLeafs({value, allowedTypes: []});
 
     return value;
   }

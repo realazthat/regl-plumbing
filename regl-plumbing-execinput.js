@@ -19,6 +19,8 @@ class ExecutionInputSubcontext {
     this.executionContext = executionContext;
     this.nodeInputContext = nodeInputContext;
     this._path = clone(path);
+
+    Object.seal(this);
   }
 
   evaluate ({runtime, recursive, resolve, missing = util.NOVALUE}) {

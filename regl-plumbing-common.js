@@ -494,6 +494,16 @@ function readPixels ({regl, texture, viewport = null}) {
   return result.buffer;
 }
 
+// wraps a texture in a class so that msgpack can know to serialize this specially
+// (since msgpack works by trying to serialize classes and us registering those classes
+// for specialized serialization)
+class ReglTextureWrapper {
+  constructor (value) {
+    this.value = value;
+  }
+}
+
+// see `common.func()`.
 class FunctionWrapper extends Function {
   constructor (f) {
     super();
@@ -504,6 +514,9 @@ class FunctionWrapper extends Function {
   }
 }
 
+// this will wrap a function in a class/object that will behave like the
+// function, but it will be of a different class (which inherits from Function)
+// that is not of type Function, so that it isn't intepreted as a dynamic value.
 function func (f) {
   let handler = {
     apply: function (obj, thisArg, argumentsList) {
@@ -696,6 +709,8 @@ module.exports.collapseDisconnecteds = collapseDisconnecteds;
 
 module.exports.checkLeafs = checkLeafs;
 module.exports.specialTerminalTests = specialTerminalTests;
+
+module.exports.ReglTextureWrapper = ReglTextureWrapper;
 
 module.exports.time = time;
 module.exports.func = func;

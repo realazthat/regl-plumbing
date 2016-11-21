@@ -42,6 +42,17 @@ class FComponent extends Component {
       }
     }
   }
+
+  destroy ({context}) {
+    if (context.available(context.i.destroy)) {
+      let destroy = context.resolve(context.i.destroy);
+
+      if (destroy) {
+        let args = [{context}];
+        return destroy.apply(this, args);
+      }
+    }
+  }
 }
 
 module.exports = FComponent;

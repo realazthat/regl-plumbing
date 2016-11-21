@@ -54,13 +54,13 @@ let texture2DiChannel0 = `
 
     {% if iChannel0.viewport.wrapS === 'border' %}
     if (viewport_uv.x < 0.0 || viewport_uv.x >= 1.0) {
-      return border_color;
+      return iChannelBorder[0];
     }
     {% endif %}
     
     {% if iChannel0.viewport.wrapT === 'border' %}
     if (viewport_uv.y < 0.0 || viewport_uv.y >= 1.0) {
-      return border_color;
+      return iChannelBorder[0];
     }
     {% endif %}
 

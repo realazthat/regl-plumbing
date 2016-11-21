@@ -22,6 +22,8 @@ class NodeOutputContext {
     this._path = clone(path);
 
     assert(this.rootNode() instanceof NodeOutputContext);
+
+    Object.seal(this);
   }
 
   node () {
@@ -296,6 +298,37 @@ class NodeOutputContext {
     }
   }
 
+  saveState () {
+    assert(this.rootNode() === this);
+
+    let {pipeline} = this;
+    let {msgpack} = pipeline;
+
+    let state = {};
+
+    // state._staticValueUpdated = this._staticValueUpdated;
+    // state._dynamicValueUpdated = this._dynamicValueUpdated;
+    // state._staticValue = this._staticValue;
+    state._dynamicValue = this._dynamicValue;
+
+    ({value: state} = msgpack.wrap({value: state, raise: true}));
+
+    return msgpack.encode(state);
+  }
+
+  loadState (buffer) {
+    assert(this.rootNode() === this);
+
+    let {pipeline} = this;
+    let {msgpack} = pipeline;
+
+    let state = msgpack.encode(buffer);
+
+    // this._staticValueUpdated = state._staticValueUpdated;
+    // this._dynamicValueUpdated = state._dynamicValueUpdated;
+    // state._staticValue = this._staticValue;
+    this._dynamicValue = state._dynamicValue;
+  }
 }
 
 module.exports.NodeOutputContext = NodeOutputContext;

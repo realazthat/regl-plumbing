@@ -10,6 +10,14 @@ class ReslTexture extends Component {
     Object.freeze(this);
   }
 
+  destroy ({context}) {
+    if (context.data.texture) {
+      context.data.texture.destroy();
+      context.data.texture = null;
+      delete context.data.texture;
+    }
+  }
+
   compile ({context}) {
     let {pipeline} = this;
     let input = context.resolve(context.i);
@@ -52,6 +60,8 @@ class ReslTexture extends Component {
             wrapT: viewport.hasOwnProperty('wrapT') ? viewport.wrapT : 'none',
             border: viewport.hasOwnProperty('border') ? viewport.border : [0, 0, 0, 1]
           };
+
+          context.data.texture = texture;
 
           let resolution = {wh: [texture.width, texture.height]};
           return resolve({
