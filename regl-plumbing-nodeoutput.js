@@ -18,42 +18,70 @@ class NodeOutputContext {
     this._root = rootNode === null ? this : rootNode;
     this._node = node;
     this._staticValue = null;
+    this._staticValueUpdated = 0;
     this._dynamicValue = null;
+    this._dynamicValueUpdated = 0;
     this._path = clone(path);
+  }
 
-    assert(this.rootNode() instanceof NodeOutputContext);
+  static init ({pipeline, node, rootNode = null, path = []}) {
+    let noc = new NodeOutputContext({pipeline, node, rootNode, path});
+    let proxy = new Proxy(noc, util.accessHandler);
 
-    Object.seal(this);
+    noc.proxy = proxy;
+    noc._root = noc._root.__box__();
+    noc._node = noc._node.__box__();
+
+    assert(noc._root instanceof NodeOutputContext);
+    assert(noc._node instanceof main.private.SugarNode);
+    assert(noc.rootNode() instanceof NodeOutputContext);
+
+    Object.seal(noc);
+
+    return proxy;
+  }
+
+  __box__ () {
+    return util.__box__.apply(this);
+  }
+
+  __unbox__ () {
+    return util.__unbox__.apply(this);
   }
 
   node () {
-    assert(this._node instanceof main.private.SugarNode);
-    return this._node;
+    let rthis = this.__unbox__();
+    assert(rthis._node instanceof main.private.SugarNode);
+    return rthis._node;
   }
 
   rootNode () {
-    assert(this._root instanceof NodeOutputContext);
-    return this._root;
+    let rthis = this.__unbox__();
+    assert(rthis._root instanceof NodeOutputContext);
+    return rthis._root;
   }
 
   __hasitem__ (subscript) {
-    return util.__hasitem__.apply(this, [subscript]);
+    let rthis = this.__unbox__();
+    return util.__hasitem__.apply(rthis, [subscript]);
   }
 
   __getitem__ (subscript) {
-    if (!this.__hasitem__(subscript)) {
+    let rthis = this.__unbox__();
+
+    if (!rthis.__hasitem__(subscript)) {
       return undefined;
     }
 
-    if (this.hasOwnProperty(subscript) || Object.getPrototypeOf(this).hasOwnProperty(subscript)) {
-      return this[subscript];
-    }
+    // if (rthis.hasOwnProperty(subscript) || Object.getPrototypeOf(rthis).hasOwnProperty(subscript)) {
+    //   return rthis[subscript];
+    // }
 
-    let path = Array.from(this._path).concat([subscript]);
+    let path = Array.from(rthis._path).concat([subscript]);
 
-    let {pipeline} = this;
+    let {pipeline} = rthis;
 
-    return new Proxy(new NodeOutputContext({pipeline, node: this.node(), rootNode: this.rootNode(), path}), util.accessHandler);
+    return NodeOutputContext.init({pipeline, node: rthis.node(), rootNode: rthis.rootNode(), path});
   }
 
   checkStaticValue ({value}) {
@@ -67,18 +95,25 @@ class NodeOutputContext {
 
   getValue ({runtime}) {
     assert(runtime === 'static' || runtime === 'dynamic');
+    let rthis = this.__unbox__();
 
-    return this.evaluate({runtime, recursive: true, resolve: false});
+    return rthis.evaluate({runtime, recursive: true, resolve: false});
   }
 
   setValue (value) {
-    assert(this.rootNode() === this);
-    assert(this._path.length === 0);
+    let rthis = this.__unbox__();
+    assert(rthis.rootNode() === rthis.__box__());
+    assert(rthis._path.length === 0);
 
-    ({value} = this.checkStaticValue({value}));
+    let {pipeline} = rthis;
 
-    this._staticValue = value;
-    this._dynamicValue = null;
+    ({value} = rthis.checkStaticValue({value}));
+
+    let t = pipeline.private.time();
+    rthis._staticValue = value;
+    rthis._staticValueUpdated = t;
+    rthis._dynamicValue = null;
+    rthis._dynamicValueUpdated = t;
   }
 
   __setitem__ (subscript, value) {
@@ -140,9 +175,12 @@ class NodeOutputContext {
   }
 
   compute ({runtime}) {
+    let rthis = this.__unbox__();
     assert(runtime === 'static' || runtime === 'dynamic');
-    // assert(this.executionContext.runtime === runtime);
-    assert(this.rootNode() === this);
+    // assert(rthis.executionContext.runtime === runtime);
+    assert(rthis.rootNode() === rthis.__box__());
+
+    let {pipeline} = this;
 
     function leafVisitor ({value}) {
       if (common.vtIsValuePlaceHolder({value})) {
@@ -159,18 +197,21 @@ class NodeOutputContext {
     }
 
     if (runtime === 'static') {
-      // let _staticValue = util.maptree({value: this._staticValue, leafVisitor});
-      let _staticValue = this._staticValue;
-      _staticValue = this.checkStaticResolvedValue(_staticValue);
-      this._staticValue = _staticValue;
+      // let _staticValue = util.maptree({value: rthis._staticValue, leafVisitor});
+      let _staticValue = rthis._staticValue;
+      _staticValue = rthis.checkStaticResolvedValue(_staticValue);
+      rthis._staticValue = _staticValue;
+      rthis._staticValueUpdated = pipeline.private.time();
     } else if (runtime === 'dynamic') {
-      let _dynamicValue = util.maptree({value: this._staticValue, leafVisitor});
-      _dynamicValue = this.checkDynamicResolvedValue(_dynamicValue);
-      this._dynamicValue = _dynamicValue;
+      let _dynamicValue = util.maptree({value: rthis._staticValue, leafVisitor});
+      _dynamicValue = rthis.checkDynamicResolvedValue(_dynamicValue);
+      rthis._dynamicValue = _dynamicValue;
+      rthis._dynamicValueUpdated = pipeline.private.time();
     }
   }
 
   evaluate ({runtime, recursive, resolve, path, missing = util.NOVALUE}) {
+    let rthis = this.__unbox__();
     assert(runtime === 'static' || runtime === 'dynamic');
     assert(recursive === true || recursive === false);
     assert(resolve === true || resolve === false);
@@ -183,11 +224,11 @@ class NodeOutputContext {
     // TODO: remove this
     assert(path === undefined);
 
-    let nodeOutputContext = this;
+    let nodeOutputContext = rthis;
 
-    path = this._path;
+    path = rthis._path;
 
-    let value = runtime === 'static' ? this.rootNode()._staticValue : this.rootNode()._dynamicValue;
+    let value = runtime === 'static' ? rthis.rootNode().__unbox__()._staticValue : rthis.rootNode().__unbox__()._dynamicValue;
 
     if (runtime === 'static') {
       if (value === null) {
@@ -299,17 +340,18 @@ class NodeOutputContext {
   }
 
   saveState () {
-    assert(this.rootNode() === this);
+    let rthis = this.__unbox__();
+    assert(rthis.rootNode() === rthis.__box__());
 
     let {pipeline} = this;
     let {msgpack} = pipeline;
 
     let state = {};
 
-    // state._staticValueUpdated = this._staticValueUpdated;
-    // state._dynamicValueUpdated = this._dynamicValueUpdated;
-    // state._staticValue = this._staticValue;
-    state._dynamicValue = this._dynamicValue;
+    // state._staticValueUpdated = rthis._staticValueUpdated;
+    // state._dynamicValueUpdated = rthis._dynamicValueUpdated;
+    // state._staticValue = rthis._staticValue;
+    state._dynamicValue = rthis._dynamicValue;
 
     ({value: state} = msgpack.wrap({value: state, raise: true}));
 
@@ -317,17 +359,18 @@ class NodeOutputContext {
   }
 
   loadState (buffer) {
-    assert(this.rootNode() === this);
+    let rthis = this.__unbox__();
+    assert(rthis.rootNode() === rthis.__box__());
 
-    let {pipeline} = this;
+    let {pipeline} = rthis;
     let {msgpack} = pipeline;
 
     let state = msgpack.encode(buffer);
 
-    // this._staticValueUpdated = state._staticValueUpdated;
-    // this._dynamicValueUpdated = state._dynamicValueUpdated;
-    // state._staticValue = this._staticValue;
-    this._dynamicValue = state._dynamicValue;
+    // rthis._staticValueUpdated = state._staticValueUpdated;
+    rthis._dynamicValueUpdated = state._dynamicValueUpdated;
+    // state._staticValue = rthis._staticValue;
+    rthis._dynamicValue = state._dynamicValue;
   }
 }
 

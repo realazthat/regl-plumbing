@@ -1,5 +1,4 @@
 
-const assert = require('assert');
 const {Group} = require('../regl-plumbing-component.js');
 const common = require('../regl-plumbing-common.js');
 const nunjucks = require('nunjucks');
@@ -58,8 +57,8 @@ class Swizzle extends Group {
       let lhs = context.resolve(context.i.lhs);
       let rhs = context.resolve(context.i.rhs);
 
-      assert(common.texture.components.invalid({components: lhs, lvalue: true, raise: true}).length === 0);
-      assert(common.texture.components.invalid({components: rhs, lvalue: false, raise: true}).length === 0);
+      common.texture.components.invalid({components: lhs, lvalue: true, raise: true});
+      common.texture.components.invalid({components: rhs, lvalue: false, raise: true});
 
       let code = nunjucks.renderString(template, {
         iChannel0, lhs, rhs

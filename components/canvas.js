@@ -8,7 +8,7 @@ class Canvas extends Component {
     super({pipeline});
     this.compileSync = true;
     this.executeSync = true;
-    this.reentrant = true;
+    this.reentrant = false;
 
 
     Object.freeze(this);

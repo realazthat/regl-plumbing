@@ -1,5 +1,4 @@
 
-const assert = require('assert');
 const {Group} = require('../regl-plumbing-component.js');
 const common = require('../regl-plumbing-common.js');
 const nunjucks = require('nunjucks');
@@ -53,7 +52,7 @@ class Copy extends Group {
       let iChannel0 = context.shallow(context.i.in);
       let components = context.resolve(context.i.components, 'rgb');
 
-      assert(common.texture.components.invalid({components, lvalue: true, raise: true}).length === 0);
+      common.texture.components.invalid({components, lvalue: true, raise: true});
 
       let code = nunjucks.renderString(template, {
         iChannel0, components

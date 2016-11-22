@@ -10,6 +10,7 @@ const nodeoutput = require('./regl-plumbing-nodeoutput.js');
 const execution = require('./regl-plumbing-execution.js');
 const execinput = require('./regl-plumbing-execinput.js');
 const dynamic = require('./regl-plumbing-dynamic.js');
+const Type = require('type-of-is');
 const {Component, Group} = require('./regl-plumbing-component.js');
 
 const EventEmitter = require('events');
@@ -100,22 +101,37 @@ function * ordering (node0) {
 
 class SugarNode {
   constructor ({pipeline, component}) {
+    assert(component instanceof Component);
+
     this.pipeline = pipeline;
     this.component = component;
     this.compiling = false;
     this.executing = false;
-    this.i = new Proxy(new nodeinput.NodeInputContext({pipeline, node: this.__box__()}), util.accessHandler);
-    this.o = new Proxy(new nodeoutput.NodeOutputContext({pipeline, node: this.__box__()}), util.accessHandler);
 
     this.context = null;
 
     this._dirty = true;
+    this._dirtyExecution = true;
+  }
 
-    Object.seal(this);
+  static init ({pipeline, component}) {
+    let snode = new SugarNode({pipeline, component});
+    let proxy = new Proxy(snode, util.accessHandler);
+    snode.proxy = proxy;
+    snode.i = nodeinput.NodeInputContext.init({pipeline, node: snode});
+    snode.o = nodeoutput.NodeOutputContext.init({pipeline, node: snode});
+
+    Object.seal(snode);
+
+    return proxy;
   }
 
   __box__ () {
-    return new Proxy(this, util.accessHandler);
+    return util.__box__.apply(this);
+  }
+
+  __unbox__ () {
+    return util.__unbox__.apply(this);
   }
 
   get dirty () {
@@ -146,12 +162,178 @@ class SugarNode {
     throw new common.PipelineError('No one gave you permission to call `SugarNode.something = value`');
   }
 
+  /**
+   * Last time the node was compiled or executed.
+   *
+   */
+  updated ({runtime}) {
+    if (runtime === 'dynamic') {
+      return this.o.__unbox__()._dynamicValueUpdated;
+    } else if (runtime === 'static') {
+      return this.o.__unbox__()._staticValueUpdated;
+    }
+  }
+
+  /**
+   * Last time the node's input has changed.
+   *
+   */
+  inUpdated ({runtime}) {
+    let t = 0;
+    t = Math.max(t, this.i.__unbox__()._staticValueUpdated);
+    t = Math.max(t, this.i.__unbox__()._injectionsUpdated);
+    if (runtime === 'dynamic') {
+      t = Math.max(t, this.i.__unbox__()._dynamicValueUpdated);
+    }
+
+    return t;
+  }
+
+  needsCompiling ({recursive, mark}) {
+    assert(recursive === true || recursive === false);
+    assert(mark === true || mark === false);
+
+    assert(this.context === null || this.context instanceof execution.ExecutionContext);
+
+    let dirty = false;
+
+    // if it is marked as dirty, or there is no context ...
+    if (this._dirty || this.context === null) {
+      dirty = true;
+    }
+
+    // if the input has changed after it was last compiled,
+    if (this.updated({runtime: 'static'}) < this.inUpdated({runtime: 'static'})) {
+      dirty = true;
+    }
+
+    // if any dependent nodes were last updated after this node was updated ...
+    for (let node of this.inSNodes()) {
+      if (node.dirty || this.updated({runtime: 'static'}) < node.updated({runtime: 'static'})) {
+        dirty = true;
+        break;
+      }
+    }
+
+    // recursively check if the previous nodes need compiling, which implies this node does as well.
+    if (recursive) {
+      // TODO: do this directly with the digraph logic, because this way the marking can be properly
+      // propagated? Although this might be solved naturally.
+
+      let nodes = Array.from(ordering(this));
+
+      for (let node of nodes) {
+        if (node.needsCompiling({recursive: false, mark})) {
+          dirty = true;
+        }
+      }
+    }
+
+    if (dirty && mark) {
+      this.dirty = true;
+    }
+
+    return dirty;
+  }
+
+  needsExecuting ({recursive, mark, issues = [], indent = 0}) {
+    assert(recursive === true || recursive === false);
+    assert(mark === true || mark === false);
+    assert(Type.is(issues, Array));
+
+    let snode = this.__unbox__();
+
+    if (snode._dirtyExecution) {
+      issues.push(`${' '.repeat(indent)} marked dirty`);
+      return true;
+    }
+
+    let dirtyExecution = false;
+
+    if (snode.needsCompiling({recursive, mark})) {
+      issues.push(`${' '.repeat(indent)} needs compiling`);
+      dirtyExecution = true;
+    }
+
+    if (!dirtyExecution && snode.i.__unbox__().hasFunctionInputs()) {
+      issues.push(`${' '.repeat(indent)} has dynamic function inputs`);
+      dirtyExecution = true;
+    }
+
+    // console.log('dynamicInputValuesChanged:',snode.i.__unbox__().dynamicInputValuesChanged(), "snode.updated({runtime: 'dynamic'}):", snode.updated({runtime: 'dynamic'}));
+
+    if (!dirtyExecution && snode.updated({runtime: 'dynamic'}) < snode.i.__unbox__().dynamicInputValuesChanged()) {
+      issues.push(`${' '.repeat(indent)} has dynamic values that have changed since last execution`);
+      dirtyExecution = true;
+    }
+
+    assert(snode.component.reentrant === true || snode.component.reentrant === false);
+
+    if (!dirtyExecution && !snode.component.reentrant) {
+      issues.push(`${' '.repeat(indent)} non-reentrant`);
+      dirtyExecution = true;
+    }
+
+    // if this was last executed prior to it being last compiled,
+    if (!dirtyExecution && snode.updated({runtime: 'dynamic'}) < snode.updated({runtime: 'static'})) {
+      issues.push(`${' '.repeat(indent)} compiled after last execution, ` +
+                  `updated dynamically: ${snode.updated({runtime: 'dynamic'})}, ` +
+                  `updated statically: ${snode.updated({runtime: 'static'})}`);
+      dirtyExecution = true;
+    }
+
+    // if this was last executed prior to it being last modified (input changing/reconnecting),
+    if (!dirtyExecution && snode.updated({runtime: 'dynamic'}) < snode.inUpdated({runtime: 'dynamic'})) {
+      issues.push(`${' '.repeat(indent)} input modified after last execution, ` +
+                  `input last updated statically/dynamically: ${snode.inUpdated({runtime: 'dynamic'})}, ` +
+                  `last updated statically/dynamically: ${snode.updated({runtime: 'dynamic'})}`);
+      dirtyExecution = true;
+    }
+
+    if (!dirtyExecution) {
+      // for each dependent node,
+      for (let node of snode.inSNodes()) {
+        // if the stuff in this node was last updated prior to the last node
+        if (snode.updated({runtime: 'dynamic'}) < node.updated({runtime: 'dynamic'})) {
+          issues.push(`${' '.repeat(indent)} dependent node executed last execution, ` +
+                      `depdenent node executed at: ${node.updated({runtime: 'dynamic'})}, ` +
+                      `this node executed at: ${snode.updated({runtime: 'dynamic'})}`);
+          dirtyExecution = true;
+        }
+      }
+    }
+
+    // recursively check if the previous nodes need executing, which implies this node does as well.
+    if (recursive) {
+      if (!dirtyExecution || mark) {
+        let nodes = Array.from(ordering(snode));
+
+        for (let node of nodes) {
+          if (dirtyExecution && !mark) {
+            break;
+          }
+
+          if (node.needsExecuting({recursive: false, mark, issues, indent: indent + 1})) {
+            issues.push(`${' '.repeat(indent)} recursively needed executing`);
+            dirtyExecution = true;
+          }
+        }
+      }
+    }
+
+    if (mark && dirtyExecution) {
+      snode._dirtyExecution = true;
+    }
+
+    return dirtyExecution;
+  }
+
   inSNodes () {
     return this.i.__unbox__().computeInSNodes();
   }
 
   clearCompile () {
-    let snode = this;
+    let snode = this.__unbox__();
 
     if (snode.context !== null) {
       snode.component.destroy({context: snode.context});
@@ -160,6 +342,7 @@ class SugarNode {
     snode.compiling = false;
     snode.context = null;
     snode._dirty = true;
+    snode._dirtyExecution = true;
 
     // TODO: spread the dirty to all children
   }
@@ -211,23 +394,38 @@ class SugarNode {
    * If an argument is not available at compile time,
    * and the component resolves it at compile time, then it will throw an error.
    */
-  compile ({recursive, sync = false}) {
+  compile ({recursive, sync = false, force = false}) {
     assert(recursive === true || recursive === false);
     assert(sync === true || sync === false);
-    let snode = this;
+    assert(force === true || force === false);
+
+    let snode = this.__unbox__();
     let {pipeline} = snode;
 
     if (recursive) {
       let nodes = Array.from(ordering(snode));
 
+      // if (!force) {
+      //   nodes.filter((node) => node.needsCompiling({recursive: false, mark: true}));
+      // }
+
       nodes.forEach((node) => { node.clearCompile(); });
       nodes.forEach((node) => { node.compiling = true; });
 
       let jobs = nodes.map(function (node) {
-        let job = () => node.compile({recursive: false, sync});
+        let job = () => node.compile({recursive: false, sync, force});
         return job;
       });
       return util.allSync(jobs);
+    }
+
+    // propagate dirty values
+    snode.needsCompiling({recursive: false, mark: true});
+
+    if (!force && !snode.needsCompiling({recursive: false, mark: false})) {
+      snode.compiling = false;
+      pipeline.emit('node-compilation-skipped', {snode: snode.__box__()});
+      return;
     }
 
     assert(Object.isFrozen(snode.component));
@@ -238,8 +436,7 @@ class SugarNode {
     let i = snode.i.__unbox__();
     i.compute({runtime: 'static'});
 
-    let context = new Proxy(new execution.ExecutionContext({pipeline, nodeInputContext: snode.i, runtime: 'static'}),
-                                           util.accessHandler);
+    let context = execution.ExecutionContext.init({pipeline, nodeInputContext: snode.i, runtime: 'static'});
 
     snode.context = context;
 
@@ -291,7 +488,8 @@ class SugarNode {
 
       snode.compiling = false;
       snode._dirty = false;
-      snode.pipeline.emit('node-compiled', {snode: snode});
+      snode._dirtyExecution = true;
+      pipeline.emit('node-compiled', {snode: snode.__box__()});
       assert(snode.isCompiled());
     }
 
@@ -310,7 +508,7 @@ class SugarNode {
   }
 
   isCompiled () {
-    let snode = this;
+    let snode = this.__unbox__();
     return snode.compiling === false && snode.context instanceof execution.ExecutionContext;
   }
 
@@ -328,10 +526,13 @@ class SugarNode {
    *
    * @see SugarNode.compile()
    */
-  execute ({recursive, sync = false}) {
+  execute ({recursive, sync = false, force = false}) {
     assert(recursive === true || recursive === false);
     assert(sync === true || sync === false);
-    let snode = this;
+    assert(force === true || force === false);
+
+    let snode = this.__unbox__();
+    let {pipeline} = snode;
 
     if (recursive) {
       // collect all the necessary (dependent) nodes
@@ -346,7 +547,7 @@ class SugarNode {
       // this hairbrained convoluted thing is required just in case one of the `execute()`
       // calls returns a Promise, and this is the only way to execute promises in order.
       let jobs = nodes.map(function (node) {
-        let job = () => node.execute({recursive: false, sync});
+        let job = () => node.execute({recursive: false, sync, force});
         return job;
       });
 
@@ -363,14 +564,23 @@ class SugarNode {
       throw new common.PipelineError('You must compile this component first before executing it');
     }
 
+    // propagate dirty values
+    snode.needsExecuting({recursive: false, mark: true});
+
+    if (!force && !snode.needsExecuting({recursive: false, mark: false})) {
+      snode.executing = false;
+      pipeline.emit('node-execution-skipped', {snode: snode.__box__()});
+      return;
+    }
+
     // mark the node as executing, if it isn't already marked as such
     snode.executing = true;
 
-    // put the execution context in dynamic mode
-    snode.context.__unbox__().runtime('dynamic');
-
     // make sure the dynamic inputs are available to the execution by (re)evaluating them
     snode.i.__unbox__().compute({runtime: 'dynamic'});
+
+    // put the execution context in dynamic mode
+    snode.context.__unbox__().runtime('dynamic');
 
     // console.log('dynamic value:', snode.i.__unbox__().getValue({runtime: 'dynamic'}));
 
@@ -388,6 +598,8 @@ class SugarNode {
 
       // make the node as execution complete
       snode.executing = false;
+      snode._dirtyExecution = false;
+      pipeline.emit('node-executed', {snode: snode.__box__()});
     }
 
     if (result instanceof Promise) {
@@ -462,7 +674,7 @@ class TextureManager {
   }
 
   key ({template}) {
-    assert(common.texture.template.invalid({template, raise: true}).length === 0);
+    common.texture.template.invalid({template, raise: true});
 
     // TODO: strip viewport
     return canonicalJSON(template);
@@ -633,6 +845,11 @@ class Pipeline extends EventEmitter {
 
     this.msgpack = require('./regl-plumbing-serialize.js')({regl});
 
+    this.private = {};
+    this.private.time = common.time;
+    Object.seal(this.private);
+    Object.seal(this.private.time);
+
     Object.freeze(this);
   }
 
@@ -656,7 +873,9 @@ class Pipeline extends EventEmitter {
     }
 
     const ComponentClass = pipeline._components.get(component);
-    return new Proxy(new SugarNode({pipeline, component: new ComponentClass({pipeline})}), util.accessHandler);
+
+    let snode = SugarNode.init({pipeline, component: new ComponentClass({pipeline})});
+    return snode;
   }
 
   dynamic (value) {

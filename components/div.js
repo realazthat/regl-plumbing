@@ -12,7 +12,7 @@ class Canvas extends Component {
     super({pipeline});
     this.compileSync = true;
     this.executeSync = true;
-    this.reentrant = true;
+    this.reentrant = false;
 
 
     Object.freeze(this);
@@ -103,7 +103,7 @@ class Canvas extends Component {
 
       // const cwidth = $canvas.width();
       const cheight = $canvas.height();
-      const crect = $canvas.get(0).getBoundingClientRect();
+      // const crect = $canvas.get(0).getBoundingClientRect();
 
       // const width = cwidth;
       // const height = Math.ceil(cheight);
@@ -120,7 +120,7 @@ class Canvas extends Component {
       // FIXME: TODO, the plus one is to cover it because there are weird corner cases
       const vph = Math.ceil(pixelRatio * (rect.bottom - rect.top)) + 1;
 
-      console.log('window.innerHeight:', window.innerHeight, 'window.clientHeight:', window.clientHeight, 'height:', height, 'rect:', rect, 'crect:', crect, 'vpy:', vpy, 'vph:', vph, 'pixelRatio:', pixelRatio);
+      // console.log('window.innerHeight:', window.innerHeight, 'window.clientHeight:', window.clientHeight, 'height:', height, 'rect:', rect, 'crect:', crect, 'vpy:', vpy, 'vph:', vph, 'pixelRatio:', pixelRatio);
 
       return [vpx, vpy, vpw, vph];
     };

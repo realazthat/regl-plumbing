@@ -188,17 +188,43 @@ function __hasitem__ (subscript) {
   if (!Type.is(subscript, String)) {
     return false;
   }
+
   if (subscript.startsWith('_')) {
     return false;
   }
-  if (this.hasOwnProperty(subscript)) {
-    return true;
-  }
-  if (Object.getPrototypeOf(this).hasOwnProperty(subscript)) {
-    return true;
-  }
+
+  // if (this.hasOwnProperty(subscript)) {
+  //   return true;
+  // }
+  // if (Object.getPrototypeOf(this).hasOwnProperty(subscript)) {
+  //   return true;
+  // }
 
   return true;
+}
+
+// a `__box__()` is reused several times, so we use this one to avoid duplication of code.
+function __box__ () {
+  // if this is a proxy,
+  if ('__proxy__' in this) {
+    assert('__unbox__' in this);
+    assert(this.__unbox__().proxy === this);
+    assert('__proxy__' in this.proxy);
+
+    return this;
+  }
+
+  assert('__proxy__' in this.proxy);
+
+  return this.proxy;
+}
+
+function __unbox__ () {
+  // this function should never be called from a proxy, since proxy specially intercepts and
+  // handles this call
+  assert(!('__proxy__' in this));
+
+  return this;
 }
 
 function clear (thing) {
@@ -221,7 +247,18 @@ let accessHandler = {
     return obj.__call__.apply(obj, argumentsList);
   },
   get: function (obj, prop) {
+    if (prop === '__proxy__') {
+      return () => true;
+    }
+
     if (prop === '__unbox__') {
+      return () => obj;
+    }
+
+    if (prop === '__box__') {
+      return () => obj.__box__();
+    }
+    if (prop === '__rthis__') {
       return () => obj;
     }
 
@@ -232,7 +269,19 @@ let accessHandler = {
     return obj[prop];
   },
   has: function (obj, prop) {
+    if (prop === '__proxy__') {
+      return true;
+    }
+
     if (prop === '__unbox__') {
+      return true;
+    }
+
+    if (prop === '__box__') {
+      return true;
+    }
+
+    if (prop === '__rthis__') {
       return true;
     }
 
@@ -266,5 +315,7 @@ module.exports.reducetree = reducetree;
 module.exports.filtertree = filtertree;
 module.exports.mapsearch = mapsearch;
 module.exports.__hasitem__ = __hasitem__;
+module.exports.__box__ = __box__;
+module.exports.__unbox__ = __unbox__;
 module.exports.NOVALUE = NOVALUE;
 module.exports.clear = clear;

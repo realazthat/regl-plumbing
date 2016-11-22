@@ -19,23 +19,47 @@ class ExecutionContext {
     this.pipeline = pipeline;
     this._runtime = runtime;
     this.nodeInputContext = nodeInputContext;
-    this.i = new Proxy(new execinput.ExecutionInputSubcontext({pipeline, executionContext: this, nodeInputContext,
-                                                     path: [], dynamic: false, disconnected: false,
-                                                     terminal: false}), util.accessHandler);
-    // this.o = new Proxy(new execoutput.ExecutionOutputSubcontext({pipeline, executionContext: this, path: []}), util.accessHandler);
-    this.data = {};
+  }
 
-    Object.seal(this);
+  static init ({pipeline, runtime, nodeInputContext}) {
+    let ec = new ExecutionContext({pipeline, runtime, nodeInputContext});
+    let proxy = new Proxy(ec, util.accessHandler);
+
+    ec.proxy = proxy;
+    ec.nodeInputContext = ec.nodeInputContext.__box__();
+    ec.i = execinput.ExecutionInputSubcontext.init({pipeline,
+                                                    executionContext: proxy,
+                                                    nodeInputContext: ec.nodeInputContext,
+                                                    path: []});
+
+    // this.o = new Proxy(new execoutput.ExecutionOutputSubcontext({pipeline, executionContext: this, path: []}), util.accessHandler);
+    ec.data = {};
+
+    Object.seal(ec);
+
+    assert(ec.runtime() === 'static' || ec.runtime() === 'dynamic');
+    assert(ec.nodeInputContext instanceof nodeinput.NodeInputContext);
+    return proxy;
+  }
+
+  __box__ () {
+    return util.__box__.apply(this);
+  }
+
+  __unbox__ () {
+    return util.__unbox__.apply(this);
   }
 
   saveState () {
-    let {pipeline} = this;
+    let rthis = this.__unbox__();
+
+    let {pipeline} = rthis;
     let {msgpack} = pipeline;
 
     let state = {};
 
-    state._runtime = this._runtime;
-    state.data = this.data;
+    state._runtime = rthis._runtime;
+    state.data = rthis.data;
 
     ({value: state} = msgpack.wrap({value: state, raise: true}));
 
@@ -43,7 +67,9 @@ class ExecutionContext {
   }
 
   loadState ({buffer}) {
-    let {pipeline} = this;
+    let rthis = this.__unbox__();
+
+    let {pipeline} = rthis;
     let {msgpack} = pipeline;
 
     let state = msgpack.decode(buffer);
@@ -51,32 +77,35 @@ class ExecutionContext {
     // TODO: turn this into an exception
     assert(state._runtime === 'static' || state._runtime === 'dynamic');
 
-    this._runtime = state._runtime;
-    this.data = state.data;
+    rthis._runtime = state._runtime;
+    rthis.data = state.data;
   }
 
   runtime (runtime = util.NOVALUE) {
+    let rthis = this.__unbox__();
+
     if (runtime !== util.NOVALUE) {
       assert(runtime === 'static' || runtime === 'dynamic');
 
-      this._runtime = runtime;
+      rthis._runtime = runtime;
 
-      return this._runtime;
+      return rthis._runtime;
     }
 
-    assert(this._runtime === 'static' || this._runtime === 'dynamic');
+    assert(rthis._runtime === 'static' || rthis._runtime === 'dynamic');
 
-    return this._runtime;
+    return rthis._runtime;
   }
 
   __setitem__ (subscript, value) {
+    let rthis = this.__unbox__();
     if (subscript === 'i') {
-      this.i.setValue(value);
+      rthis.i.setValue(value);
       return true;
     }
 
     if (subscript === 'o') {
-      this.o.setValue(value);
+      rthis.o.setValue(value);
       return true;
     }
 
@@ -84,12 +113,14 @@ class ExecutionContext {
   }
 
   node () {
-    return this.nodeInputContext.__unbox__().node();
+    let rthis = this.__unbox__();
+    return rthis.nodeInputContext.__unbox__().node();
   }
 
   framebuffer (outTex) {
-    let {pipeline} = this;
-    let context = this;
+    let rthis = this.__unbox__();
+    let {pipeline} = rthis;
+    let context = rthis;
 
     return context.map(outTex.regl.texture, (reglTexture) => {
       return pipeline.framebuffer({node: context.node(), reglTexture: reglTexture});
@@ -97,7 +128,8 @@ class ExecutionContext {
   }
 
   map (value, func = ((value) => value)) {
-    let context = this;
+    let rthis = this.__unbox__();
+    let context = rthis;
 
     common.checkLeafs({
       value,
@@ -110,9 +142,9 @@ class ExecutionContext {
       leafVisitor: function ({value}) {
         if (value instanceof execinput.ExecutionInputSubcontext) {
           if (context.runtime() === 'static') {
-            return value.evaluate({runtime: 'static', recursive: true, resolve: false});
+            return value.__unbox__().evaluate({runtime: 'static', recursive: true, resolve: false});
           } else if (context.runtime() === 'dynamic') {
-            return value.evaluate({runtime: 'dynamic', recursive: true, resolve: true});
+            return value.__unbox__().evaluate({runtime: 'dynamic', recursive: true, resolve: true});
           } else {
             assert(false);
           }
@@ -161,7 +193,8 @@ class ExecutionContext {
   }
 
   resolve (value, missing = util.NOVALUE) {
-    let context = this;
+    let rthis = this.__unbox__();
+    let context = rthis;
 
     common.checkLeafs({value,
       allowedTypes: [execinput.ExecutionInputSubcontext, dynamic.Dynamic],
@@ -178,7 +211,7 @@ class ExecutionContext {
         if (value instanceof execinput.ExecutionInputSubcontext) {
           // TODO: turn this into an exception
           // english: you can only "resolve" things with this context that belong to this context.
-          assert(value.executionContext === context.__unbox__());
+          assert(value.__unbox__().executionContext === context.__box__());
 
           return context.resolveSubcontext(value, THISNOVALUE);
         }
@@ -219,13 +252,14 @@ class ExecutionContext {
   }
 
   resolveSubcontext (inputSubcontext, missing = util.NOVALUE) {
+    let rthis = this.__unbox__();
     let {ExecutionInputSubcontext} = execinput;
     assert(inputSubcontext instanceof ExecutionInputSubcontext);
-    assert(this.runtime() === 'static' || this.runtime() === 'dynamic');
+    assert(rthis.runtime() === 'static' || rthis.runtime() === 'dynamic');
 
     inputSubcontext = inputSubcontext.__unbox__();
 
-    let value = inputSubcontext.evaluate({runtime: this.runtime(), recursive: true, resolve: true, missing});
+    let value = inputSubcontext.evaluate({runtime: rthis.runtime(), recursive: true, resolve: true, missing});
 
     common.checkLeafs({value, allowedTypes: []});
 
@@ -233,13 +267,14 @@ class ExecutionContext {
   }
 
   shallow (inputSubcontext, defaultValue = util.NOVALUE) {
-    let {pipeline} = this;
+    let rthis = this.__unbox__();
+    let {pipeline} = rthis;
 
     let {ExecutionInputSubcontext} = execinput;
     assert(inputSubcontext instanceof ExecutionInputSubcontext);
-    assert(this.runtime() === 'static' || this.runtime() === 'dynamic');
+    assert(rthis.runtime() === 'static' || rthis.runtime() === 'dynamic');
 
-    let context = this;
+    let context = rthis;
 
     if (defaultValue !== util.NOVALUE && !context.available(inputSubcontext)) {
       if (context.dynamicallyAvailable(inputSubcontext)) {
@@ -250,7 +285,7 @@ class ExecutionContext {
     }
 
     inputSubcontext = inputSubcontext.__unbox__();
-    let value = inputSubcontext.evaluate({runtime: this.runtime(), recursive: false, resolve: true});
+    let value = inputSubcontext.evaluate({runtime: rthis.runtime(), recursive: false, resolve: true});
 
     common.checkLeafs({
       value,
@@ -262,28 +297,31 @@ class ExecutionContext {
   }
 
   available (inputSubcontext) {
+    let rthis = this.__unbox__();
     let {ExecutionInputSubcontext} = execinput;
     assert(inputSubcontext instanceof ExecutionInputSubcontext);
-    assert(this.runtime() === 'static' || this.runtime() === 'dynamic');
+    assert(rthis.runtime() === 'static' || rthis.runtime() === 'dynamic');
 
     inputSubcontext = inputSubcontext.__unbox__();
 
-    return inputSubcontext.available({runtime: this.runtime(), terminalDynamic: false});
+    return inputSubcontext.available({runtime: rthis.runtime(), terminalDynamic: false});
   }
 
   dynamicallyAvailable (inputSubcontext) {
+    let rthis = this.__unbox__();
     let {ExecutionInputSubcontext} = execinput;
     assert(inputSubcontext instanceof ExecutionInputSubcontext);
-    assert(this.runtime() === 'static' || this.runtime() === 'dynamic');
+    assert(rthis.runtime() === 'static' || rthis.runtime() === 'dynamic');
 
     inputSubcontext = inputSubcontext.__unbox__();
 
-    return inputSubcontext.available({runtime: this.runtime(), terminalDynamic: true});
+    return inputSubcontext.available({runtime: rthis.runtime(), terminalDynamic: true});
   }
 
   texture ({cascade}) {
-    let context = this;
-    let {pipeline} = this;
+    let rthis = this.__unbox__();
+    let context = rthis;
+    let {pipeline} = rthis;
 
     let template = {};
 
@@ -302,17 +340,18 @@ class ExecutionContext {
       };
     }
 
-    assert(common.texture.template.invalid({template, raise: true}).length === 0);
+    common.texture.template.invalid({template, raise: true});
 
     return template;
   }
 
   out ({inTex, outTex, missing = common.texture.template.base, clone = false}) {
+    let rthis = this.__unbox__();
     assert(inTex instanceof execinput.ExecutionInputSubcontext);
     assert(outTex instanceof execinput.ExecutionInputSubcontext);
 
-    let context = this;
-    let {pipeline} = this;
+    let context = rthis;
+    let {pipeline} = rthis;
 
     inTex = context.shallow(inTex, missing);
 
@@ -348,7 +387,7 @@ class ExecutionContext {
     //   template[key] = _.merge(template[key], outTex[key]);
     // }
 
-    assert(common.texture.template.invalid({template, raise: true}).length === 0);
+    common.texture.template.invalid({template, raise: true});
 
     template.regl = {
       texture: pipeline.texture({template, node: context.node()})

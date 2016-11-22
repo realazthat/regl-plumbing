@@ -19,8 +19,29 @@ class ExecutionInputSubcontext {
     this.executionContext = executionContext;
     this.nodeInputContext = nodeInputContext;
     this._path = clone(path);
+  }
 
-    Object.seal(this);
+  static init ({pipeline, executionContext, nodeInputContext, path}) {
+    let eic = new ExecutionInputSubcontext({pipeline, executionContext, nodeInputContext, path});
+    let proxy = new Proxy(eic, util.accessHandler);
+    eic.proxy = proxy;
+
+    eic.executionContext = eic.executionContext.__box__();
+    eic.nodeInputContext = eic.nodeInputContext.__box__();
+
+    assert(eic.nodeInputContext instanceof nodeinput.NodeInputContext);
+    assert(eic.executionContext instanceof execution.ExecutionContext);
+    Object.seal(eic);
+
+    return proxy;
+  }
+
+  __box__ () {
+    return util.__box__.apply(this);
+  }
+
+  __unbox__ () {
+    return util.__unbox__.apply(this);
   }
 
   evaluate ({runtime, recursive, resolve, missing = util.NOVALUE}) {
@@ -46,27 +67,30 @@ class ExecutionInputSubcontext {
   }
 
   __getitem__ (subscript) {
-    if (!this.__hasitem__(subscript)) {
+    let rthis = this.__unbox__();
+
+    if (!rthis.__hasitem__(subscript)) {
       return undefined;
     }
 
-    if (this.hasOwnProperty(subscript) || Object.getPrototypeOf(this).hasOwnProperty(subscript)) {
-      return this[subscript];
-    }
+    // if (rthis.hasOwnProperty(subscript) || Object.getPrototypeOf(rthis).hasOwnProperty(subscript)) {
+    //   return rthis[subscript];
+    // }
 
-    let pipeline = this.pipeline;
-    let path = Array.from(this._path).concat([subscript]);
+    let {pipeline} = rthis;
+    let path = Array.from(rthis._path).concat([subscript]);
 
-    let executionContext = this.executionContext;
-    let nodeInputContext = this.nodeInputContext[subscript];
+    let executionContext = rthis.executionContext;
+    let nodeInputContext = rthis.nodeInputContext[subscript];
 
-    return new Proxy(new ExecutionInputSubcontext({pipeline, executionContext, nodeInputContext, path}), util.accessHandler);
+    return ExecutionInputSubcontext.init({pipeline, executionContext, nodeInputContext, path});
   }
 
   getValue ({runtime}) {
+    let rthis = this.__unbox__();
     assert(runtime === 'static' || runtime === 'dynamic');
 
-    return this.evaluate({runtime, recursive: true, resolve: false});
+    return rthis.evaluate({runtime, recursive: true, resolve: false});
   }
 
   setValue (value) {
@@ -74,7 +98,8 @@ class ExecutionInputSubcontext {
   }
 
   __setitem__ (subscript, value) {
-    this.__getitem__(subscript).setValue(value);
+    let rthis = this.__unbox__();
+    rthis.__getitem__(subscript).setValue(value);
     return true;
   }
 

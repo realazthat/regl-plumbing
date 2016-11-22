@@ -521,6 +521,29 @@ function func (f) {
   let handler = {
     apply: function (obj, thisArg, argumentsList) {
       return obj.f.apply(thisArg, argumentsList);
+    },
+    get: function (obj, prop) {
+      if (prop === '__proxy__') {
+        return () => true;
+      }
+
+      if (prop === '__unbox__') {
+        return () => obj;
+      }
+
+      return obj[prop];
+    },
+    has: function (obj, prop) {
+      if (prop === '__proxy__') {
+        return true;
+      }
+
+      if (prop === '__unbox__') {
+        return true;
+      }
+
+      // default functionality
+      return prop in obj;
     }
   };
 
@@ -683,7 +706,7 @@ const texture = {
 
   // returns true if a texture's viewport covers the entire image exactly
   fitted: function fitted ({texture}) {
-    assert(common.texture.template.invalid({template: texture, raise: true}).length === 0);
+    common.texture.template.invalid({template: texture, raise: true});
 
     return (texture.viewport.xy[0] === 0 &&
             texture.viewport.xy[1] === 0 &&
